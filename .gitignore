@@ -166,3 +166,5 @@ docker_run.sh
 Dockerfile
 secrets.env
 .tmpcache
+
+src/decan/scratch.py
