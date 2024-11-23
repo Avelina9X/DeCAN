@@ -29,7 +29,7 @@ def set_pretrained_embeddings(
     source_model_path: str = 'facebook/opt-125m',
     cache_dir: str | None = None,
 ):
-    """_summary_
+    """ Overwrites the trainable embeddings from a source model.
 
     Args:
         model (PreTrainedModel): Model to write the embeddings to.
