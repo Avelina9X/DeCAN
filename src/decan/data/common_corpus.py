@@ -85,6 +85,7 @@ class CommonCorpusClientDataset( IterableDataset ):
         return f'https://huggingface.co/datasets/PleIAs/common_corpus/resolve/main/common_corpus_{k+1}/subset_{j+1}_{i+1}.parquet'
     
     def tokenize_line( self, iterator ):
+        document = 0
         while True:
             # Get the next line from the shared iterator
             text = next( iterator )
@@ -98,7 +99,8 @@ class CommonCorpusClientDataset( IterableDataset ):
 
             # Yield ( input, target ) tokens one-by-one
             for x, y in zip( tokens_x, tokens_y ):
-                yield ( x, y )
+                yield ( x, y, document )
+                document += 1
             
             # Cleanup because I don't trust generators
             del text
@@ -146,14 +148,16 @@ class CommonCorpusClientDataset( IterableDataset ):
             count = 0
             xs = []
             ys = []
+            ds = []
             for _ in range( self.worker_batch_size ):
                 xs.append( [] )
                 ys.append( [] )
+                ds.append( [] )
 
-            return count, xs, ys
+            return count, xs, ys, ds
 
         # Initialise token count, inputs and targets
-        count, xs, ys = reset()
+        count, xs, ys, ds = reset()
 
         # Create a tokenizer iterator for each line in the micro batch
         generators = [ iter( self.tokenize_line( iterator ) ) for _ in range( self.worker_batch_size ) ]
@@ -162,16 +166,17 @@ class CommonCorpusClientDataset( IterableDataset ):
             while True:
                 # Continuously add new tokens to the batch
                 for g_idx, generator in enumerate( generators ):
-                    x, y = next( generator )
+                    x, y, d = next( generator )
                     xs[ g_idx ].append( x )
                     ys[ g_idx ].append( y )
+                    ds[ g_idx ].append( d )
                 count += 1
 
                 # When maximum sequence length is reached, yield the micro batch and reset
                 if count == self.seq_length:
-                    yield ( torch.LongTensor( xs ), torch.LongTensor( ys ) )
+                    yield ( torch.LongTensor( xs ), torch.LongTensor( ys ), torch.LongTensor( ds ) )
 
-                    count, xs, ys = reset()
+                    count, xs, ys, ds = reset()
         except StopIteration:
             return
 
@@ -293,16 +298,18 @@ class CommonCorpusDataset( IterableDataset ):
             while True:
                 xs = []
                 ys = []
+                ds = []
                 
                 # Continuously add new micro batches to the sub batch
                 for worker in workers:
-                    x, y = next( worker )
+                    x, y, d = next( worker )
 
                     xs.append( x[0] )
                     ys.append( y[0] )
+                    ds.append( d[0] )
                 
                 # Yield sub batch when full
-                yield torch.cat( xs ), torch.cat( ys )
+                yield torch.cat( xs ), torch.cat( ys ), torch.cat( ds )
         except StopIteration:
             return
     
