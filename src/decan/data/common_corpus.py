@@ -1,3 +1,5 @@
+""" Common Corpus dataset class """
+
 
 from datetime import timedelta
 import os
