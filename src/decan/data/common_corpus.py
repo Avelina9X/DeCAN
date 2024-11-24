@@ -4,6 +4,7 @@
 from datetime import timedelta
 import os
 import shutil
+from typing import Any, Mapping
 
 import torch
 from torch.distributed import TCPStore # type: ignore
@@ -11,6 +12,8 @@ from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
 from datasets import DownloadConfig, load_dataset
+
+from .utils import SerializableMixin
 
 class CommonCorpusClientDataset( IterableDataset ):
     def __init__(
@@ -197,7 +200,7 @@ class CommonCorpusClientDataset( IterableDataset ):
             prefetch_factor=16,
         )
 
-class CommonCorpusDataset( IterableDataset ):
+class CommonCorpusDataset( IterableDataset, SerializableMixin ):
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
@@ -334,3 +337,9 @@ class CommonCorpusDataset( IterableDataset ):
             pin_memory=pin_memory,
             pin_memory_device=pin_memory_device
         )
+
+    def state_dict( self ) -> Mapping[str, Any]:
+        return { 'current_shard': self.get_current_shard() }
+
+    def load_state_dict( self, state_dict: Mapping[str, Any] ):
+        self.starting_shard = state_dict[ 'current_shard' ]
