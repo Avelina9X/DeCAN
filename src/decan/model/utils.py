@@ -1,8 +1,9 @@
 
 import os
 import torch
-from transformers import AutoTokenizer, AddedToken, PreTrainedTokenizerBase
+from transformers import AutoTokenizer, AddedToken, PreTrainedTokenizerBase, PreTrainedTokenizerFast
 from transformers import AutoModelForCausalLM, PreTrainedModel
+from tokenizers.processors import TemplateProcessing
 
 def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
     """ Loads the OPT tokenizer and modifies it for use with DeCAN
@@ -13,7 +14,7 @@ def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
     Returns:
         PreTrainedTokenizerBase: Modified GPT2TokenizerFast using OPT vocabulary, and with DeCAN's special tokens.
     """
-    return AutoTokenizer.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(
         'facebook/opt-125m',
         cache_dir=cache_dir or os.environ[ 'HF_CACHE_DIR' ],
         use_fast=True,
@@ -21,6 +22,20 @@ def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
         sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
         cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
     )
+
+    assert isinstance( tokenizer, PreTrainedTokenizerFast )
+
+    tokenizer._tokenizer.post_processor = TemplateProcessing( # type: ignore # pylint: disable=W0212
+        single=f'{tokenizer.bos_token}:0 $A:0 {tokenizer.eos_token}:0',
+        pair=f'{tokenizer.bos_token}:0 $A:0 {tokenizer.eos_token}:0 {tokenizer.bos_token}:1 $B:1 {tokenizer.eos_token}:1',
+        special_tokens=[
+            ( tokenizer.bos_token, tokenizer.bos_token_id ),
+            ( tokenizer.eos_token, tokenizer.eos_token_id ),
+        ]
+    )
+
+    return tokenizer
+    
 
 
 @torch.no_grad
