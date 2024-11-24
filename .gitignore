@@ -171,3 +171,5 @@ secrets.env
 src/decan/scratch.py
 
 .vscode
+
+checkpoints/
