@@ -19,9 +19,9 @@ class TrainerConfig:
         'track': False
     } )
 
-    wandb_mode: str = field( metadata={ 'help': 'WandB tracking mode. Must be `online`, `offline`, or `disabled`', 'track': False } )
-    wandb_project: str = field( metadata={ 'help': 'Name of the project to track runs to in WandB.', 'track': False } )
-    wandb_group: str = field( metadata={ 'help': 'Name of the group inside the WandB project to assign runs to.', 'track': False } )
+    wandb_mode: str = field( metadata={ 'help': 'WandB tracking mode. Must be `online`, `offline`, or `disabled`. May be a formatted string to use envars.', 'track': False } )
+    wandb_project: str = field( metadata={ 'help': 'Name of the project to track runs to in WandB. May be a formatted string to use envars.', 'track': False } )
+    wandb_group: str = field( metadata={ 'help': 'Name of the group inside the WandB project to assign runs to. May be a formatted string to use envars.', 'track': False } )
     wandb_tags: list[str] = field( metadata={ 'help': 'A list of strings to populate the tags property of a WandB run.', 'track': False } )
 
     micro_batch_size: int = field( metadata={ 'help': 'Micro batch size of a single gradient accumulation step per device.' } )
@@ -90,6 +90,11 @@ class TrainerConfig:
 
         if self.global_batch_size % ( self.num_workers_per_device * self.num_devices ) != 0:
             raise ValueError( '`global_batch_size` must be divisible by `num_workers_per_device * num_devices` to prevent dataloader misalignment!' )
+
+        # Compute the wandb properties with potential envar string replacements
+        self.wandb_mode = self.wandb_mode.format( **os.environ )
+        self.wandb_project = self.wandb_project.format( **os.environ )
+        self.wandb_group = self.wandb_group.format( **os.environ )
 
         # Compute the output directory with potential envar string replacements
         self.output_dir = os.path.expanduser( os.path.join( *self.output_dir.format( **os.environ ).split( '/' ) ) )
