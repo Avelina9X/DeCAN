@@ -113,6 +113,26 @@ class TrainerConfig:
 
 
     @property
+    def run_dir( self ) -> str:
+        return os.path.join( self.output_dir, self.run_name )
+
+    @property
+    def init_dir( self ) -> str:
+        return os.path.join( self.run_dir, 'checkpoint_init' )
+
+    @property
+    def curr_checkpoint_dir( self ) -> str:
+        return os.path.join( self.run_dir, 'checkpoint_curr' )
+
+    @property
+    def final_checkpoint_dir( self ) -> str:
+        return os.path.join( self.run_dir, 'checkpoint_final' )
+
+    def perm_checkpoint_dir( self, step: int ):
+        return os.path.join( self.run_dir, f'checkpoint_step_{step}' )
+
+
+    @property
     def local_batch_size( self ) -> int:
         return self.global_batch_size // self.num_devices
 
