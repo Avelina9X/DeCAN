@@ -117,10 +117,6 @@ class TrainerConfig:
         return os.path.join( self.output_dir, self.run_name )
 
     @property
-    def init_dir( self ) -> str:
-        return os.path.join( self.run_dir, 'checkpoint_init' )
-
-    @property
     def curr_checkpoint_dir( self ) -> str:
         return os.path.join( self.run_dir, 'checkpoint_curr' )
 
