@@ -166,12 +166,14 @@ class TrainerConfig:
             writer.write( self.to_json_string() )
 
     @classmethod
-    def load_config( cls, save_directory: str ):
+    def load_config( cls, save_directory: str, trainer_kwargs: dict ):
         json_file_path = os.path.join( save_directory, 'trainer.json' )
         with open( json_file_path, 'r', encoding='utf-8' ) as reader:
             obj = json.load( reader )
 
-        return cls( **obj )
+        config = recursive_dict_update( obj, trainer_kwargs )
+
+        return cls( **config )
 
 
     def __str__( self ):
@@ -235,12 +237,11 @@ class TrainerConfig:
                 raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
             if not 'run_name' in trainer_kwargs:
                 raise ValueError( 'When resuming runs you MUST set `run_name` on the command line.' )
-            if model_config_path:
+            if model_config_path or len( model_kwargs ) != 0:
                 raise ValueError(
-                    'When resuming runs you CANNOT set model parameters from a YAML config file. '
-                    'If you would like to change parameters use `--model-kwargs` command line args.'
+                    'When resuming runs you CANNOT modify model params.'
                 )
-            if model_config_path:
+            if trainer_config_path:
                 raise ValueError(
                     'When resuming runs you CANNOT set trainer parameters from a YAML config file. '
                     'If you would like to change parameters use the appropriate command line args.'
