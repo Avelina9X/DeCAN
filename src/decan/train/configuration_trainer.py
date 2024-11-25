@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 import os
 import json
 from dataclasses import dataclass, field, fields, Field
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 import shortuuid
 import torch
@@ -143,7 +143,7 @@ class TrainerConfig:
 
 
     @classmethod
-    def parse_arguments( cls, parser: ArgumentParser ):
+    def parse_arguments( cls, parser: ArgumentParser, args: Sequence[str] | None = None ):
 
         # Add argument for trainer type
         parser.add_argument(
@@ -177,7 +177,7 @@ class TrainerConfig:
         model_kwargs_parser( parser )
 
         # Parse arguments as dict
-        arguments = parser.parse_args().__dict__
+        arguments = parser.parse_args( args ).__dict__
 
         # Pop mode, model config and trainer config
         mode: Literal['new', 'resume'] = arguments.pop( 'mode' )
