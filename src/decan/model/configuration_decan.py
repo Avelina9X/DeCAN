@@ -63,6 +63,6 @@ class DeCANConfig( PretrainedConfig ):
             eos_token_id=eos_token_id,
             pad_token_id=pad_token_id,
             sep_token_id=sep_token_id,
-            use_bfloat16=True, # this is a hack to enable bf16 mixed precision training
+            use_bfloat16=kwargs.pop( 'use_bfloat16', True ), # this is a hack to enable bf16 mixed precision training
             **kwargs
         )
