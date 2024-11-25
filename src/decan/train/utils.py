@@ -13,7 +13,7 @@ class ParseKwargs( Action ):
         setattr( namespace, self.dest, dict() )
         for value in values: # type: ignore
             key, value = value.split( '=' )
-            getattr( namespace, self.dest )[ key ] = value
+            getattr( namespace, self.dest )[ key ] = yaml.load( value, yaml.FullLoader )
 
 def field_parser( parser: ArgumentParser, f: Field ):
     if isinstance( f.type, str ):
