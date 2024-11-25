@@ -209,12 +209,12 @@ class TrainerConfig:
             
         # If model config is specified, load and update the model kwargs
         if model_config_path:
-            new_kwargs = parse_yaml_file( model_config_path, 'model' )
-            model_kwargs = recursive_dict_update( model_kwargs, new_kwargs )
+            config_kwargs = parse_yaml_file( model_config_path, 'model' )
+            model_kwargs = recursive_dict_update( config_kwargs, model_kwargs )
 
         # If trainer config is specified, load and update the trainer kwargs
         if trainer_config_path:
-            new_kwargs = parse_yaml_file( trainer_config_path, 'model' )
-            trainer_kwargs = recursive_dict_update( trainer_kwargs, new_kwargs )
+            config_kwargs = parse_yaml_file( trainer_config_path, 'trainer' )
+            trainer_kwargs = recursive_dict_update( config_kwargs, trainer_kwargs )
         
         return mode, trainer_kwargs, model_kwargs
