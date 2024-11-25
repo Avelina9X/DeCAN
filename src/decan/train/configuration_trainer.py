@@ -129,6 +129,15 @@ class TrainerConfig:
 
 
     @property
+    def use_ddp( self ) -> bool:
+        return self.num_devices > 1
+
+    @property
+    def use_zero_optimizer( self ) -> bool:
+        return self.use_ddp and self.optimizer_zero
+
+
+    @property
     def local_batch_size( self ) -> int:
         return self.global_batch_size // self.num_devices
 
