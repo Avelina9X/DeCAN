@@ -1,11 +1,20 @@
 """ Module containing the trainer configuration class. """
 
+from argparse import ArgumentParser
 import os
 import json
 from dataclasses import dataclass, field, fields, Field
+from typing import Any, Literal
 
 import shortuuid
 import torch
+
+from .utils import (
+    field_parser,
+    model_kwargs_parser,
+    recursive_dict_update,
+    parse_yaml_file,
+)
 
 @dataclass
 class TrainerConfig:
@@ -104,22 +113,6 @@ class TrainerConfig:
 
 
     @property
-    def run_dir( self ) -> str:
-        return os.path.join( self.output_dir, self.run_name )
-
-    @property
-    def curr_checkpoint_dir( self ) -> str:
-        return os.path.join( self.run_dir, 'checkpoint_curr' )
-
-    @property
-    def final_checkpoint_dir( self ) -> str:
-        return os.path.join( self.run_dir, 'checkpoint_final' )
-
-    def perm_checkpoint_dir( self, step: int ):
-        return os.path.join( self.run_dir, f'checkpoint_step_{step}' )
-
-
-    @property
     def local_batch_size( self ) -> int:
         return self.global_batch_size // self.num_devices
 
@@ -147,3 +140,81 @@ class TrainerConfig:
         return f'{self.__class__.__name__}(\n{self_as_attr}\n)'
 
     __repr__ = __str__
+
+
+    @classmethod
+    def parse_arguments( cls, parser: ArgumentParser ):
+
+        # Add argument for trainer type
+        parser.add_argument(
+            'mode',
+            choices=[ 'new', 'resume' ]
+        )
+
+        # Add argument for specifying model_config_path
+        parser.add_argument(
+            '--model_config',
+            '--model-config',
+            nargs='?',
+            help='Path to model config yaml file.',
+            dest='model_config_path'
+        )
+
+        # Add argument for specifying trainer_config_path
+        parser.add_argument(
+            '--trainer_config',
+            '--trainer-config',
+            nargs='?',
+            help='Path to trainer config yaml file.',
+            dest='trainer_config_path'
+        )
+
+        # Add arguments for all fields in the trainer
+        for f in fields( cls ):
+            field_parser( parser, f )
+
+        # Add argument to parse model kwargs as key=value pairs
+        model_kwargs_parser( parser )
+
+        # Parse arguments as dict
+        arguments = parser.parse_args().__dict__
+
+        # Pop mode, model config and trainer config
+        mode: Literal['new', 'resume'] = arguments.pop( 'mode' )
+        model_config_path: str | None = arguments.pop( 'model_config_path' )
+        trainer_config_path: str | None = arguments.pop( 'trainer_config_path' )
+
+        # Pop model kwargs
+        model_kwargs: dict[str, Any] = arguments.pop( 'model_kwargs' ) or {}
+
+        # All remaining arguments are trainer kwargs
+        trainer_kwargs: dict[str, Any] = arguments
+
+        # Check that output dir and run name are specified when resuming
+        if mode == 'resume':
+            if not 'output_dir' in trainer_kwargs:
+                raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
+            if not 'run_name' in trainer_kwargs:
+                raise ValueError( 'When resuming runs you MUST set `run_name` on the command line.' )
+            if model_config_path:
+                raise ValueError(
+                    'When resuming runs you CANNOT set model parameters from a YAML config file. '
+                    'If you would like to change parameters use `--model-kwargs` command line args.'
+                )
+            if model_config_path:
+                raise ValueError(
+                    'When resuming runs you CANNOT set trainer parameters from a YAML config file. '
+                    'If you would like to change parameters use the appropriate command line args.'
+                )
+            
+        # If model config is specified, load and update the model kwargs
+        if model_config_path:
+            new_kwargs = parse_yaml_file( model_config_path, 'model' )
+            model_kwargs = recursive_dict_update( model_kwargs, new_kwargs )
+
+        # If trainer config is specified, load and update the trainer kwargs
+        if trainer_config_path:
+            new_kwargs = parse_yaml_file( trainer_config_path, 'model' )
+            trainer_kwargs = recursive_dict_update( trainer_kwargs, new_kwargs )
+        
+        return mode, trainer_kwargs, model_kwargs
