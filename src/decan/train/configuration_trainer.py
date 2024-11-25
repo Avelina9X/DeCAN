@@ -189,7 +189,13 @@ class TrainerConfig:
         # Add argument for trainer type
         parser.add_argument(
             'mode',
-            choices=[ 'new', 'resume' ]
+            choices=[ 'new', 'start', 'resume' ],
+            help=(
+                'Launch mode for the trainer:'
+                ' `new` initialises a new checkpoint directory and saves the configs, and initialized model.'
+                ' `start` assumes only the initial checkpoint has been saved (use if a crash occurs before the first checkpoint.)'
+                ' `resume` continues training from the most recent checkpoint (use if a crash occurs after the first checkpoint or when training over multiple sessions.)'
+            )
         )
 
         # Add argument for specifying model_config_path
@@ -221,7 +227,7 @@ class TrainerConfig:
         arguments = parser.parse_args( args ).__dict__
 
         # Pop mode, model config and trainer config
-        mode: Literal['new', 'resume'] = arguments.pop( 'mode' )
+        mode: Literal['new', 'start', 'resume'] = arguments.pop( 'mode' )
         model_config_path: str | None = arguments.pop( 'model_config_path' )
         trainer_config_path: str | None = arguments.pop( 'trainer_config_path' )
 
@@ -232,7 +238,7 @@ class TrainerConfig:
         trainer_kwargs: dict[str, Any] = arguments
 
         # Check that output dir and run name are specified when resuming
-        if mode == 'resume':
+        if mode in [ 'start', 'resume' ]:
             if not 'output_dir' in trainer_kwargs:
                 raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
             if not 'run_name' in trainer_kwargs:

@@ -10,7 +10,7 @@ from .configuration_trainer import TrainerConfig
 
 class Trainer:
     @staticmethod
-    def initialize( mode: Literal['new', 'resume'], trainer_kwargs: dict, model_kwargs: dict ):
+    def initialize( mode: Literal['new', 'start', 'resume'], trainer_kwargs: dict, model_kwargs: dict ):
         match mode:
             case 'new':
                 # Initialize fresh configs
@@ -39,6 +39,25 @@ class Trainer:
                 model.save_pretrained( save_dir )
                 tokenizer.save_pretrained( save_dir, legacy_format=False )
                 trainer_config.save_config( save_dir )
+
+                return trainer_config
+
+            case 'start':
+                # Infer directory from trainer_kwargs
+                load_dir = os.path.join(
+                    os.path.expanduser( trainer_kwargs[ 'output_dir' ] ),
+                    trainer_kwargs[ 'run_name' ],
+                    'checkpoint_curr'
+                )
+                
+                # Load config and update
+                trainer_config = TrainerConfig.load_config( load_dir, trainer_kwargs )
+
+                if trainer_config.do_resume:
+                    raise ValueError( 'Got `do_resume=True` when trying to start a run!' )
+
+                if trainer_config.do_init:
+                    raise ValueError( 'Got `do_init=True` when trying to start a run!' )
 
                 return trainer_config
 
