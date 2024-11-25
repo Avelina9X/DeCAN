@@ -166,12 +166,12 @@ class TrainerConfig:
             writer.write( self.to_json_string() )
 
     @classmethod
-    def load_config( cls, save_directory: str, trainer_kwargs: dict ):
+    def load_config( cls, save_directory: str, trainer_kwargs: dict | None = None ):
         json_file_path = os.path.join( save_directory, 'trainer.json' )
         with open( json_file_path, 'r', encoding='utf-8' ) as reader:
             obj = json.load( reader )
 
-        config = recursive_dict_update( obj, trainer_kwargs )
+        config = recursive_dict_update( obj, trainer_kwargs or {} )
 
         return cls( **config )
 
