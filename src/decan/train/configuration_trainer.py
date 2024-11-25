@@ -85,8 +85,8 @@ class TrainerConfig:
     } )
 
     def __post_init__( self ):
-        if not ( self.do_init ^ self.do_resume ):
-            raise ValueError( 'Exactly one of `do_init` or `do_resume` must be True' )
+        if self.do_init and self.do_resume:
+            raise ValueError( 'Cannot set both `do_init` and `do_resume` to True' )
 
         if self.num_devices == -1:
             self.num_devices = torch.cuda.device_count()
