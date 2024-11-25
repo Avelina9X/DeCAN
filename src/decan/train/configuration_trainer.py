@@ -106,7 +106,7 @@ class TrainerConfig:
         self.wandb_group = self.wandb_group.format( **os.environ )
 
         # Compute the output directory with potential envar string replacements
-        self.output_dir = os.path.expanduser( os.path.join( *self.output_dir.format( **os.environ ).split( '/' ) ) )
+        self.output_dir = os.path.expanduser( self.output_dir.format( **os.environ ) )
 
         # Compute the run name with potential UUID string replacements
         self.run_name = self.run_name.format( uuid=shortuuid.uuid()[ : 4 ] )
@@ -149,6 +149,20 @@ class TrainerConfig:
 
     def to_wandb_dict( self ) -> dict:
         return self.to_dict( tracked_only=True )
+
+    def save_config( self, save_directory: str ):
+        os.makedirs( save_directory, exist_ok=True )
+        json_file_path = os.path.join( save_directory, 'trainer.json' )
+        with open( json_file_path, 'w', encoding='utf-8' ) as writer:
+            writer.write( self.to_json_string() )
+
+    @classmethod
+    def load_config( cls, save_directory: str ):
+        json_file_path = os.path.join( save_directory, 'trainer.json' )
+        with open( json_file_path, 'r', encoding='utf-8' ) as reader:
+            obj = json.load( reader )
+
+        return cls( **obj )
 
 
     def __str__( self ):
