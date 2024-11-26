@@ -19,6 +19,7 @@ def setup():
     config = Trainer.initialize( mode, trainer_kwargs, model_kwargs )
 
     if config.use_ddp:
+        mp.set_start_method( 'spawn' )
         mp.spawn( # type: ignore
             fn=run,
             args=( config.num_devices, config ),

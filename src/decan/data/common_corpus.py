@@ -54,8 +54,6 @@ class CommonCorpusClientDataset( IterableDataset ):
         
         self.world_size = world_size
         self.world_rank = world_rank
-
-        self.client_store = TCPStore( self.server_ip, self.server_port, None, False, timeout=timedelta( seconds=30 ) )
         
         self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'common_corpus', f'worker_{self.global_worker_id}' )
     
@@ -183,6 +181,8 @@ class CommonCorpusClientDataset( IterableDataset ):
             return
 
     def __iter__( self ):
+        self.client_store = TCPStore( self.server_ip, self.server_port, None, False, timeout=timedelta( seconds=30 ) )
+        
         for batch in iter( self.batch_iterator() ):
             yield batch
     
