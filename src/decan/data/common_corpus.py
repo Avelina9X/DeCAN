@@ -10,7 +10,7 @@ from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
-from datasets import DownloadConfig, load_dataset
+from datasets import DownloadConfig, load_dataset, disable_progress_bar
 
 class CommonCorpusClientDataset( IterableDataset ):
     def __init__(
@@ -181,6 +181,7 @@ class CommonCorpusClientDataset( IterableDataset ):
             return
 
     def __iter__( self ):
+        disable_progress_bar()
         self.client_store = TCPStore( self.server_ip, self.server_port, None, False, timeout=timedelta( seconds=30 ) )
         
         for batch in iter( self.batch_iterator() ):
