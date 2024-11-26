@@ -7,6 +7,40 @@ from inspect import isclass
 from dataclasses import Field
 from argparse import ArgumentParser, SUPPRESS, Action
 
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
+
+from torcheval import metrics
+from torcheval.metrics.toolkit import sync_and_compute
+
+class MeanMetric():
+    def __init__( self, is_distributed: bool ):
+        self.metric = metrics.Mean().to( 'cuda' )
+        self.is_distributed = is_distributed
+
+    def update( self, input: torch.Tensor, *, weight: float | int | torch.Tensor = 1.0 ):
+        return self.metric.update( input, weight=weight)
+
+    def compute( self ):
+        if self.is_distributed:
+            return sync_and_compute( self.metric )
+        return self.metric.compute()
+
+    def reset( self ):
+        if self.is_distributed:
+            dist.barrier()
+        self.metric.reset()
+
+
+class DDPModelWrapper( DistributedDataParallel ):
+    """ Custom DDP wrapper. Defers method and attribute accesses to underlying module. """
+    def __getattr__( self, name ):
+        try:
+            return super().__getattr__( name )
+        except AttributeError:
+            return getattr( self.module, name )
+
 
 class ParseKwargs( Action ):
     def __call__( self, parser, namespace, values, option_string=None ):
@@ -14,6 +48,7 @@ class ParseKwargs( Action ):
         for value in values: # type: ignore
             key, value = value.split( '=' )
             getattr( namespace, self.dest )[ key ] = yaml.load( value, yaml.FullLoader )
+
 
 def field_parser( parser: ArgumentParser, f: Field ):
     if isinstance( f.type, str ):
