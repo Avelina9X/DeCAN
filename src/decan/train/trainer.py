@@ -4,6 +4,7 @@ import os
 import time
 from typing import Literal
 
+import tqdm
 import numpy as np
 
 import torch
@@ -248,6 +249,18 @@ class Trainer:
         # Cleanup dataset cache
         self.dataset.cleanup_cache()
 
+    def progress_bar( self, elapsed ):
+        return tqdm.tqdm.format_meter(
+            n=( ( self.training_step - 1 ) % self.trainer_config.steps_per_epoch ) + 1,
+            total=self.trainer_config.steps_per_epoch,
+            elapsed=elapsed,
+            ncols=100,
+            unit='it',
+            bar_format='{desc}: {percentage:.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]',
+            postfix=f"loss={self.metrics['loss'].compute():.3f}, acc={self.metrics['acc'].compute():.3f}",
+            prefix=f'Step {self.training_step}'
+        )
+
     def train( self ):
         # Create dataloader
         dataloader = self.dataset.as_data_loader()
@@ -268,6 +281,9 @@ class Trainer:
             metrics = {}
 
             self.train_step( next( iterator ), cache_list )
+
+            if self.world_rank == 0:
+                print( '\r' + self.progress_bar( time.time() - start_time), end='', flush=True )
             
             do_temp_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.temp_checkpoint_freq ) == 0
             do_perm_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.perm_checkpoint_freq ) == 0
@@ -280,7 +296,13 @@ class Trainer:
                 # TODO: Reset metrics
                 # TODO: newline TQDM
                 # TODO: Log to wandb
+
+                self.reset_metrics()
+                
                 start_time = time.time()
+
+                if self.world_rank == 0:
+                    print()
 
             if do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 self.save_temp_checkpoint()
