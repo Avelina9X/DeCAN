@@ -1,6 +1,7 @@
 """ Trainer module for training DeCAN models """
 
 import os
+import time
 from typing import Literal
 
 import numpy as np
@@ -261,6 +262,8 @@ class Trainer:
 
         # Create loop until session end or max_steps
         session_max_step = self.trainer_config.max_steps if self.trainer_config.epochs_per_session == -1 else self.training_step + self.trainer_config.steps_per_epoch * self.trainer_config.epochs_per_session
+
+        start_time = time.time()
         for session_step in range( self.training_step, session_max_step ):
             metrics = {}
 
@@ -277,7 +280,7 @@ class Trainer:
                 # TODO: Reset metrics
                 # TODO: newline TQDM
                 # TODO: Log to wandb
-                ...
+                start_time = time.time()
 
             if do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 self.save_temp_checkpoint()
@@ -292,6 +295,8 @@ class Trainer:
         # TODO: finalise wandb
 
     def train_step( self, batch, cache_list: list[DeCANTrainingCache] ):
+        self.model.train()
+        
         # Unpack batch
         tokens, targets, documents = batch
 
@@ -327,6 +332,7 @@ class Trainer:
         self.optimizer_scaler.update()
         self.optimizer.zero_grad()
 
+    @torch.compile
     def train_micro_step(
         self,
         curr_tokens: torch.Tensor,
