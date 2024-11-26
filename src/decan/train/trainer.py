@@ -269,7 +269,7 @@ class Trainer:
         # TODO: Setup wandb
 
         cache_list = [
-            DeCANTrainingCache( max_cache_length=self.trainer_config.gradient_accumulation_steps )
+            DeCANTrainingCache( max_cache_length=self.trainer_config.cache_length )
             for _ in range( self.trainer_config.gradient_accumulation_steps )
         ]
 
