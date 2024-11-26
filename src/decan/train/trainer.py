@@ -344,7 +344,6 @@ class Trainer:
 
         self.optimizer_step()
 
-    @torch.compile
     def optimizer_step( self ):
         self.training_step += 1
 
