@@ -282,8 +282,9 @@ class Trainer:
 
             self.train_step( next( iterator ), cache_list )
 
+            progress_bar = self.progress_bar( time.time() - start_time)
             if self.world_rank == 0:
-                print( '\r' + self.progress_bar( time.time() - start_time), end='', flush=True )
+                print( '\r' + progress_bar, end='', flush=True )
             
             do_temp_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.temp_checkpoint_freq ) == 0
             do_perm_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.perm_checkpoint_freq ) == 0
