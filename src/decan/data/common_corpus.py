@@ -4,7 +4,6 @@
 from datetime import timedelta
 import os
 import shutil
-from typing import Any, Mapping
 
 import torch
 from torch.distributed import TCPStore # type: ignore
