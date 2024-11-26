@@ -310,6 +310,9 @@ class Trainer:
             curr_documents = documents_list[step]
             curr_cache = cache_list[step]
 
+            if self.trainer_config.use_ddp:
+                self.model.requires_backward_grad_sync = step == ( self.trainer_config.gradient_accumulation_steps - 1 ) # type: ignore
+
             curr_cache.cache_to( device='cuda', non_blocking=True )
             loss, acc = self.train_micro_step( curr_tokens, curr_targets, curr_documents, curr_cache )
             curr_cache.detach_cache_to( device='cpu', non_blocking=True )
@@ -319,6 +322,7 @@ class Trainer:
 
         self.optimizer_step()
 
+    @torch.compile
     def optimizer_step( self ):
         self.training_step += 1
 
