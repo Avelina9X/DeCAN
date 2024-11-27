@@ -313,6 +313,10 @@ class Trainer:
                 config={
                     'trainer': self.trainer_config.to_wandb_dict(),
                     'model': self.model.config.to_diff_dict(),
+                    'num_parameters': self.model.num_parameters( only_trainable=False ),
+                    'num_parameters_non_embedding': self.model.num_parameters( only_trainable=False, exclude_embeddings=True ),
+                    'num_parameters_trainable': self.model.num_parameters( only_trainable=True ),
+                    'num_parameters_trainable_non_embedding': self.model.num_parameters( only_trainable=True, exclude_embeddings=True ),
                 }
             )
 
