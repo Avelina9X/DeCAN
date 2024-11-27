@@ -186,6 +186,13 @@ class TrainerConfig:
     @classmethod
     def parse_arguments( cls, parser: ArgumentParser, args: Sequence[str] | None = None ):
 
+        # Add mode argument
+        parser.add_argument(
+            'mode',
+            choices=[ 'pretrain' ],
+            help='Training mode. Currently only supports `pretrain`.'
+        )
+
         # Add argument for trainer type
         parser.add_argument(
             'init_mode',
