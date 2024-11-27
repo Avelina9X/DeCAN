@@ -17,6 +17,7 @@ from transformers import AutoTokenizer
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.modeling_outputs import CausalLMOutputWithPast
+import wandb
 
 from model import DeCANConfig, DeCANForCausalLM
 from model.utils import load_tokenizer, set_pretrained_embeddings
@@ -266,7 +267,19 @@ class Trainer:
         dataloader = self.dataset.as_data_loader()
         iterator = iter( dataloader )
 
-        # TODO: Setup wandb
+        if self.world_rank == 0:
+            wandb.login( key=os.environ[ 'WANDB_API_KEY' ] )
+            wandb.init(
+                mode=self.trainer_config.wandb_mode,
+                project=self.trainer_config.wandb_project,
+                group=self.trainer_config.wandb_group,
+                tags=self.trainer_config.wandb_tags,
+                name=self.trainer_config.run_name,
+                config={
+                    'trainer': self.trainer_config.to_wandb_dict(),
+                    'model': self.model.to_diff_dict(),
+                }
+            )
 
         cache_list = [
             DeCANTrainingCache( max_cache_length=self.trainer_config.cache_length )
@@ -294,17 +307,18 @@ class Trainer:
             # TODO: Eval step maybe???
 
             if do_log or do_temp_checkpoint * do_perm_checkpoint * do_final_checkpoint:
-                # TODO: Reset metrics
-                # TODO: newline TQDM
-                # TODO: Log to wandb
-
-                self.reset_metrics()
+                metrics.update( { f'train/{k}': v for k, v in self.reset_metrics().items() } )
+                metrics.update( {
+                    'stats/training_step': self.training_step,
+                    'stats/num_tokens': self.training_step * self.trainer_config.global_batch_size * self.trainer_config.sequence_length,
+                } )
                 
-                start_time = time.time()
-
                 if self.world_rank == 0:
                     print()
+                    wandb.log( metrics )
 
+                start_time = time.time()
+                
             if do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 self.save_temp_checkpoint()
 
@@ -315,7 +329,8 @@ class Trainer:
                 self.save_final_checkpoint()
                 break
 
-        # TODO: finalise wandb
+        if self.world_rank == 0:
+            wandb.finish()
 
     def train_step( self, batch, cache_list: list[DeCANTrainingCache] ):
         self.model.train()
