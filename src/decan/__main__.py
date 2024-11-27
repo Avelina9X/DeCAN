@@ -14,9 +14,9 @@ def run( rank, world_size, config: TrainerConfig ):
 def setup():
     parser = ArgumentParser()
 
-    mode, trainer_kwargs, model_kwargs = TrainerConfig.parse_arguments( parser )
+    init_mode, trainer_kwargs, model_kwargs = TrainerConfig.parse_arguments( parser )
 
-    config = Trainer.initialize( mode, trainer_kwargs, model_kwargs )
+    config = Trainer.initialize( init_mode, trainer_kwargs, model_kwargs )
 
     if config.use_ddp:
         mp.set_start_method( 'spawn' )

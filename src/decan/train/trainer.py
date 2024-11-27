@@ -403,7 +403,7 @@ class Trainer:
         
     @staticmethod
     def initialize(
-        mode: Literal['new', 'start', 'resume'],
+        init_mode: Literal['new', 'start', 'resume'],
         trainer_kwargs: dict,
         model_kwargs: dict
     ) -> TrainerConfig:
@@ -412,7 +412,7 @@ class Trainer:
         Must be called BEFORE spawning new processes with torch.multiprocessing.spawn.
 
         Args:
-            mode (Literal['new', 'start', 'resume']): Run initialisation mode produced by `TrainerConfig.parse_arguments(...)`
+            init_mode (Literal['new', 'start', 'resume']): Run initialisation mode produced by `TrainerConfig.parse_arguments(...)`
             trainer_kwargs (dict): Additional trainer arguments produced by `TrainerConfig.parse_arguments(...)`
             model_kwargs (dict): Additional model arguments produced by `TrainerConfig.parse_arguments(...)`
 
@@ -420,7 +420,7 @@ class Trainer:
             TrainerConfig: The config object to be passed to Trainer.__init__() in spawned processes.
         """
         
-        match mode:
+        match init_mode:
             case 'new':
                 # Initialize fresh configs
                 trainer_config = TrainerConfig( **trainer_kwargs )
@@ -486,4 +486,4 @@ class Trainer:
                 return trainer_config
 
             case _:
-                raise ValueError( f"`mode` must be either 'new' or 'resume' but got {mode}" )
+                raise ValueError( f"`mode` must be either 'new' or 'resume' but got {init_mode}" )

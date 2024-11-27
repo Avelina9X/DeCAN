@@ -188,7 +188,7 @@ class TrainerConfig:
 
         # Add argument for trainer type
         parser.add_argument(
-            'mode',
+            'init_mode',
             choices=[ 'new', 'start', 'resume' ],
             help=(
                 'Launch mode for the trainer:'
@@ -227,7 +227,7 @@ class TrainerConfig:
         arguments = parser.parse_args( args ).__dict__
 
         # Pop mode, model config and trainer config
-        mode: Literal['new', 'start', 'resume'] = arguments.pop( 'mode' )
+        init_mode: Literal['new', 'start', 'resume'] = arguments.pop( 'init_mode' )
         model_config_path: str | None = arguments.pop( 'model_config_path' )
         trainer_config_path: str | None = arguments.pop( 'trainer_config_path' )
 
@@ -238,7 +238,7 @@ class TrainerConfig:
         trainer_kwargs: dict[str, Any] = arguments
 
         # Check that output dir and run name are specified when resuming
-        if mode in [ 'start', 'resume' ]:
+        if init_mode in [ 'start', 'resume' ]:
             if not 'output_dir' in trainer_kwargs:
                 raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
             if not 'run_name' in trainer_kwargs:
@@ -263,4 +263,4 @@ class TrainerConfig:
             config_kwargs = parse_yaml_file( trainer_config_path, 'trainer' )
             trainer_kwargs = recursive_dict_update( config_kwargs, trainer_kwargs )
         
-        return mode, trainer_kwargs, model_kwargs
+        return init_mode, trainer_kwargs, model_kwargs
