@@ -60,6 +60,15 @@ class Trainer:
         self.model: DeCANForCausalLM = DeCANForCausalLM.from_pretrained( trainer_config.curr_checkpoint_dir ).cuda() # type: ignore
         self.tokenizer = AutoTokenizer.from_pretrained( trainer_config.curr_checkpoint_dir, use_fast=True )
 
+        # Check model and tokenizer agree on special token IDs
+        for id_name in [ 'bos', 'eos', 'pad', 'sep', 'cls' ]:
+            full_id_name = f'{id_name}_token_id'
+            model_id = getattr( self.model.config, full_id_name )
+            tokenizer_id = getattr( self.tokenizer, full_id_name )
+
+            if model_id != tokenizer_id:
+                raise ValueError( f'Special token ID missmatch! Got `model.config.{full_id_name}={model_id}` and `tokenizer.{full_id_name}={tokenizer_id}`' )
+
         # Wrap model for DDP
         if trainer_config.use_ddp:
             self.model = DDPModelWrapper( self.model, device_ids=[ world_rank ] ) # type: ignore
@@ -395,7 +404,7 @@ class Trainer:
 
             logits = model_outputs.logits
 
-            pad_token_id = self.tokenizer.pad_token_id or -100
+            pad_token_id = self.model.config.pad_token_id or -100
 
             valid_tokens = ( curr_targets != pad_token_id )
             valid_length = valid_tokens.float().sum( -1 ).clamp( min=1.0 )
