@@ -8,7 +8,10 @@ from train import TrainerConfig, Trainer
 
 def run( rank, world_size, config: TrainerConfig ):
     trainer = Trainer( config, world_size, rank )
-    trainer.train()
+    try:
+        trainer.train()
+    except KeyboardInterrupt:
+        print( 'KeyboardInterrupt: aborting early!' )
     trainer.cleanup()
 
 def setup():
