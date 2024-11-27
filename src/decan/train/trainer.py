@@ -456,7 +456,8 @@ class Trainer:
         histograms = {}
         with torch.inference_mode():
             for name, p in self.model.named_parameters():
-                histograms[ f"parameters/{name.replace( '.', '/' ) }" ] =wandb.Histogram( p.cpu().numpy() ) # type: ignore
+                if p.requires_grad:
+                    histograms[ f"parameters/{name.replace( '.', '/' ) }" ] = wandb.Histogram( p.cpu().numpy() ) # type: ignore
         return histograms
 
     @staticmethod
