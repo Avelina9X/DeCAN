@@ -317,17 +317,19 @@ class Trainer:
 
             if do_log or do_temp_checkpoint * do_perm_checkpoint * do_final_checkpoint:
                 metrics.update( { f'train/{k}': v for k, v in self.reset_metrics().items() } )
-                metrics.update( {
-                    'stats/training_step': self.training_step,
-                    'stats/num_tokens': self.training_step * self.trainer_config.global_batch_size * self.trainer_config.sequence_length,
-                } )
-                
+
                 if self.world_rank == 0:
-                    print()
+                    metrics.update( self.get_parameter_histograms() )
+                    metrics.update( {
+                        'stats/training_step': self.training_step,
+                        'stats/num_tokens': self.training_step * self.trainer_config.global_batch_size * self.trainer_config.sequence_length,
+                    } )
+                    
                     wandb.log( metrics )
+                    print()
 
                 start_time = time.time()
-                
+
             if do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 self.save_temp_checkpoint()
 
@@ -423,8 +425,14 @@ class Trainer:
         self.optimizer_scaler.scale( loss / self.trainer_config.gradient_accumulation_steps ).backward()
 
         return loss.detach(), acc.detach()
-            
-        
+
+    def get_parameter_histograms( self ):
+        histograms = {}
+        with torch.inference_mode():
+            for name, p in self.model.named_parameters():
+                histograms[ f"parameters/{name.replace( '.', '/' ) }" ] =wandb.Histogram( p.cpu().numpy() ) # type: ignore
+        return histograms
+
     @staticmethod
     def initialize(
         init_mode: Literal['new', 'start', 'resume'],
