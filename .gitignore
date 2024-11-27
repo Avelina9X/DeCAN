@@ -173,3 +173,5 @@ src/decan/scratch.py
 .vscode
 
 checkpoints/
+
+wandb/
