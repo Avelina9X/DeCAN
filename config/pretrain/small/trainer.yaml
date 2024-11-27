@@ -9,24 +9,24 @@ trainer:
     - pretrain
     - small
   
-  # micro_batch_size:
-  global_batch_size: 2048
+  micro_batch_size: 6
+  global_batch_size: 1920
 
-  max_steps: 262144
+  max_steps: 25600 # 400 epochs @ 64 batches per epoch
   warmup_steps: 2048
 
-  steps_per_epoch: 256
+  steps_per_epoch: 64
   validation_freq: 4
   temp_checkpoint_freq: 4
-  perm_checkpoint_freq: 64
+  perm_checkpoint_freq: 80
 
   # epochs_per_session
 
   sequence_length: 2048
   cache_length: 4096
 
-  lr_max: 1.0e-3
-  lr_min: 1.0e-4
+  lr_max: 3.0e-3
+  lr_min: 3.0e-4
 
   weight_decay: 0.1
 
@@ -34,11 +34,11 @@ trainer:
   optimizer_kwargs:
     betas: [ 0.9, 0.95 ]
     eps: 1.0e-8
-  optimizer_zero: False
+  optimizer_zero: True
 
   max_grad_norm: 1.0
 
-  num_workers_per_device: 8
+  num_workers_per_device: 4
 
   # num_devices
   # do_init
