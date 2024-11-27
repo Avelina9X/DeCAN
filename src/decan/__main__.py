@@ -13,9 +13,7 @@ def run( rank, world_size, config: TrainerConfig ):
 
 def setup():
     parser = ArgumentParser()
-
     init_mode, trainer_kwargs, model_kwargs = TrainerConfig.parse_arguments( parser )
-
     config = Trainer.initialize( init_mode, trainer_kwargs, model_kwargs )
 
     if config.use_ddp:
