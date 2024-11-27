@@ -84,6 +84,7 @@ class Trainer:
         # Check if trainer and optimizer states exist
         trainer_state_exists = os.path.exists( os.path.join( trainer_config.curr_checkpoint_dir, 'trainer_state.pt' ) )
         optimizer_state_exists = os.path.exists( os.path.join( trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' ) )
+        scaler_state_exists = os.path.exists( os.path.join( trainer_config.curr_checkpoint_dir, 'scaler_state.pt' ) )
 
         # If we are NOT resuming we do NOT want trainer and optimizer states to exist
         if not trainer_config.do_resume:
@@ -91,6 +92,8 @@ class Trainer:
                 raise ValueError( 'Trying to start from an initial checkpoint but `trainer_state.pt` already exists!' )
             if optimizer_state_exists:
                 raise ValueError( 'Trying to start from an initial checkpoint but `optimizer_state.pt` already exists!' )
+            if scaler_state_exists:
+                raise ValueError( 'Trying to start from an initial checkpoint but `scaler_state.pt` already exists!' )
 
             self.trainer_config.do_resume = True
         
@@ -100,10 +103,13 @@ class Trainer:
                 raise ValueError( 'Trying to resume from a checkpoint but `trainer_state.pt` does not exist!' )
             if not optimizer_state_exists:
                 raise ValueError( 'Trying to resume from a checkpoint but `optimizer_state.pt` does not exist!' )
+            if not scaler_state_exists:
+                raise ValueError( 'Trying to resume from a checkpoint but `scaler_state.pt` does not exist!' )
 
             # Load trainer and optimizer states
             self.load_trainer_state()
             self.load_optimizer_state()
+            self.load_scaler_state()
 
         # Load dataset with potentially updated starting shard
         self.dataset = self.create_dataset()
@@ -215,9 +221,29 @@ class Trainer:
         if self.world_rank == 0:
             torch.save( state_dict, optimizer_state_path )
 
+    def load_scaler_state( self ):
+        scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
+
+        # Load the state dict from disk
+        state_dict = torch.load( scaler_state_path, weights_only=True )
+
+        # Set the scaler state
+        self.optimizer_scaler.load_state_dict( state_dict )
+
+    def save_scaler_state( self ):
+        scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
+
+        # Get the state dict
+        state_dict = self.optimizer_scaler.state_dict()
+
+        # We can only save to disk if we're on rank zero
+        if self.world_rank == 0:
+            torch.save( state_dict, scaler_state_path )
+
     def save_temp_checkpoint( self ):
         self.save_trainer_state()
         self.save_optimizer_state()
+        self.save_scaler_state()
         
         save_dir = self.trainer_config.curr_checkpoint_dir
         self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
@@ -299,7 +325,7 @@ class Trainer:
         session_max_step = self.trainer_config.max_steps if self.trainer_config.epochs_per_session == -1 else self.training_step + self.trainer_config.steps_per_epoch * self.trainer_config.epochs_per_session
 
         start_time = time.time()
-        for session_step in range( self.training_step, session_max_step ):
+        for _ in range( self.training_step, session_max_step ):
             metrics = {}
 
             self.train_step( next( iterator ), cache_list )
@@ -315,7 +341,7 @@ class Trainer:
 
             # TODO: Eval step maybe???
 
-            if do_log or do_temp_checkpoint * do_perm_checkpoint * do_final_checkpoint:
+            if do_log or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 metrics.update( { f'train/{k}': v for k, v in self.reset_metrics().items() } )
 
                 if self.world_rank == 0:
