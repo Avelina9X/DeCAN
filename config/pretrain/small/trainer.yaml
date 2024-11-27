@@ -2,7 +2,7 @@ trainer:
   output_dir: '{CHECKPOINT_DIR}/pretrain/small/'
   run_name: 'DeCAN-Small_{uuid}'
 
-  wandb_mode: disbaled
+  wandb_mode: disabled
   wandb_project: '{WANDB_PROJECT_NAME}'
   wandb_group: pretrain
   wandb_tags:
