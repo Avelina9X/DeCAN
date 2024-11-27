@@ -234,6 +234,7 @@ class TrainerConfig:
         arguments = parser.parse_args( args ).__dict__
 
         # Pop mode, model config and trainer config
+        arguments.pop( 'mode' )
         init_mode: Literal['new', 'start', 'resume'] = arguments.pop( 'init_mode' )
         model_config_path: str | None = arguments.pop( 'model_config_path' )
         trainer_config_path: str | None = arguments.pop( 'trainer_config_path' )
