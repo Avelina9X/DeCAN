@@ -189,7 +189,7 @@ class Trainer:
         # Save state dict and config to disk only on rank zero
         if self.world_rank == 0:
             torch.save( state_dict, trainer_state_path )
-            self.trainer_config.save_config( trainer_state_path )
+            self.trainer_config.save_config( self.trainer_config.curr_checkpoint_dir )
 
     def load_optimizer_state( self ):
         optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
