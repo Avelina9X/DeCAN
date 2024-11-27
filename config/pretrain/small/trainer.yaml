@@ -9,7 +9,7 @@ trainer:
     - pretrain
     - small
   
-  micro_batch_size: 6
+  micro_batch_size: 8
   global_batch_size: 1920
 
   max_steps: 25600 # 400 epochs @ 64 batches per epoch
