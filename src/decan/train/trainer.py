@@ -214,11 +214,9 @@ class Trainer:
             assert isinstance( self.optimizer, ZeroRedundancyOptimizer )
             self.optimizer.consolidate_state_dict( 0 )
 
-        # Get the state dict
-        state_dict = self.optimizer.state_dict()
-
         # We can only save to disk if we're on rank zero
         if self.world_rank == 0:
+            state_dict = self.optimizer.state_dict()
             torch.save( state_dict, optimizer_state_path )
 
     def load_scaler_state( self ):
@@ -233,11 +231,9 @@ class Trainer:
     def save_scaler_state( self ):
         scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
 
-        # Get the state dict
-        state_dict = self.optimizer_scaler.state_dict()
-
         # We can only save to disk if we're on rank zero
         if self.world_rank == 0:
+            state_dict = self.optimizer_scaler.state_dict()
             torch.save( state_dict, scaler_state_path )
 
     def save_temp_checkpoint( self ):
