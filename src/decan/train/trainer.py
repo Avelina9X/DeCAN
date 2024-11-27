@@ -277,7 +277,7 @@ class Trainer:
                 name=self.trainer_config.run_name,
                 config={
                     'trainer': self.trainer_config.to_wandb_dict(),
-                    'model': self.model.to_diff_dict(),
+                    'model': self.model.config.to_diff_dict(),
                 }
             )
 
