@@ -23,7 +23,7 @@ trainer:
   # epochs_per_session
 
   sequence_length: 2048
-  cache_length: 8192
+  cache_length: 4096
 
   lr_max: 1.0e-3
   lr_min: 1.0e-4
