@@ -354,13 +354,20 @@ class Trainer:
                     wandb.log( metrics )
                     print()
 
+                # Reset start time
                 start_time = time.time()
 
             if do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 self.save_temp_checkpoint()
 
+                # Re-reset start time because saving takes time
+                start_time = time.time()
+
             if do_perm_checkpoint or do_final_checkpoint:
                 self.save_perm_checkpoint()
+
+                # Re-reset start time because saving takes time
+                start_time = time.time()
 
             if do_final_checkpoint:
                 self.save_final_checkpoint()
