@@ -5,6 +5,8 @@ from datetime import timedelta
 import os
 import shutil
 
+from langdetect import DetectorFactory, detect, LangDetectException
+
 import torch
 from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
@@ -107,8 +109,7 @@ class CommonCorpusClientDataset( IterableDataset ):
             del tokens_x
             del tokens_y
 
-    def line_iterator( self ):
-        
+    def line_iterator( self ):        
         # Iterate from current shard until end of the dataset
         for current_shard in range( self.starting_shard, 10_000 ):
             # Update current shard number to resume later (only worker zero updates this value)
@@ -133,7 +134,14 @@ class CommonCorpusClientDataset( IterableDataset ):
                 
                 # Yield only if (iterator rank) % (number of workers in world) equals worker id
                 if i % ( self.num_procs * self.world_size ) == self.global_worker_id:
-                    yield line[ 'text' ]
+                    text = line[ 'text' ]
+
+                    try:
+                        lang = detect( text )
+                        if lang == 'en':
+                            yield line[ 'text' ]
+                    except LangDetectException:
+                        pass
             
             # Delete in memory dataset and in cache dataset
             del dataset
@@ -183,6 +191,9 @@ class CommonCorpusClientDataset( IterableDataset ):
     def __iter__( self ):
         disable_progress_bar()
         self.client_store = TCPStore( self.server_ip, self.server_port, None, False, timeout=timedelta( seconds=30 ) )
+
+        # Reset lang detect seed
+        DetectorFactory.seed = 0
         
         for batch in iter( self.batch_iterator() ):
             yield batch
