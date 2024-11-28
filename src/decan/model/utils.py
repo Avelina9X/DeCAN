@@ -22,19 +22,19 @@ def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
         bos_token='<s>',
         sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
         cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
-        add_eos_token=True,
+        # add_eos_token=True,
     )
 
     assert isinstance( tokenizer, PreTrainedTokenizerFast )
 
-    tokenizer._tokenizer.post_processor = TemplateProcessing( # type: ignore # pylint: disable=W0212
-        single=f'{tokenizer.bos_token}:0 $A:0 {tokenizer.eos_token}:0',
-        pair=f'{tokenizer.bos_token}:0 $A:0 {tokenizer.eos_token}:0 {tokenizer.bos_token}:1 $B:1 {tokenizer.eos_token}:1',
-        special_tokens=[
-            ( tokenizer.bos_token, tokenizer.bos_token_id ),
-            ( tokenizer.eos_token, tokenizer.eos_token_id ),
-        ]
-    )
+    # tokenizer._tokenizer.post_processor = TemplateProcessing( # type: ignore # pylint: disable=W0212
+    #     single=f'{tokenizer.bos_token}:0 $A:0 {tokenizer.eos_token}:0',
+    #     pair=f'{tokenizer.bos_token}:0 $A:0 {tokenizer.eos_token}:0 {tokenizer.bos_token}:1 $B:1 {tokenizer.eos_token}:1',
+    #     special_tokens=[
+    #         ( tokenizer.bos_token, tokenizer.bos_token_id ),
+    #         ( tokenizer.eos_token, tokenizer.eos_token_id ),
+    #     ]
+    # )
 
     return tokenizer
     
