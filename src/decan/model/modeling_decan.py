@@ -502,7 +502,7 @@ class DeCANPreTrainedModel( PreTrainedModel ): # pylint: disable=W0223
     base_model_prefix = 'model'
     _no_split_modules = [ 'DeCANDecoderLayer' ]
     _skip_keys_device_placement = [ "past_key_values" ]
-    _supports_cache_class = True # Note: only supports DeCAN specific caches
+    _supports_cache_class = False # Note: actually supports certain DeCAN specific caches
 
     def _init_weights( self, module ):
         std = self.config.initializer_range
