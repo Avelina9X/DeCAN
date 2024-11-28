@@ -22,6 +22,7 @@ def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
         bos_token='<s>',
         sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
         cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
+        add_eos_token=True,
     )
 
     assert isinstance( tokenizer, PreTrainedTokenizerFast )
