@@ -447,7 +447,7 @@ class Trainer:
             valid_length = valid_tokens.float().sum( -1 ).clamp( min=1.0 )
 
             loss = torch.nn.functional.cross_entropy(
-                input=logits.transpose( 2, 1 ).float(),
+                input=logits.transpose( 2, 1 ).float().contiguous(),
                 target=curr_targets,
                 ignore_index=pad_token_id,
                 reduction='none'
