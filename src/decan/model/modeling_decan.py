@@ -162,6 +162,15 @@ class DeCANTrainingCache( Cache, DeCANCacheMixin ):
     def forward( self, *args, **kwargs ):
         raise NotImplementedError( 'There is no forward method.' )
 
+    def pre_trim( self, sequence_length: int ):
+        new_length = self.max_cache_length - sequence_length
+        if self.document_ids is not None:
+            self.document_ids = self.document_ids[ :, -new_length : ]
+
+        for i, ( key_cache, value_cache ) in enumerate( zip( self.key_cache, self.value_cache ) ):
+            self.key_cache[i] = key_cache[ :, :, -new_length :, : ]
+            self.value_cache[i] = value_cache[ :, :, -new_length :, : ]
+
 
 class DeCANDynamicCache( DynamicCache, DeCANCacheMixin ):
     """ Implements a dynamic cache for DeCAN with unbounded maximum size to be used during inference.
