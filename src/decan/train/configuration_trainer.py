@@ -53,6 +53,8 @@ class TrainerConfig:
     sequence_length: int = field( default=2048, metadata={ 'help': 'Number of tokens per sequence.' } )
     cache_length: int = field( default=8192, metadata={ 'help': 'Maximum number of tokens to store in the cache.' } )
 
+    document_masking: bool = field( default=False, metadata={ 'help': 'Prevents attention between different documents.' } )
+
     lr_max: float = field( default=1e-3, metadata={ 'help': 'Maximum absolute learning rate after warmup.' } )
     lr_min: float = field( default=1e-4, metadata={ 'help': 'Minimum learning rate at end of annealing.' } )
 

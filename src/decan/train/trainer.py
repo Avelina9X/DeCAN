@@ -397,7 +397,7 @@ class Trainer:
         for step in range( self.trainer_config.gradient_accumulation_steps ):
             curr_tokens = tokens_list[step]
             curr_targets = targets_list[step]
-            curr_documents = documents_list[step]
+            curr_documents = documents_list[step] if self.trainer_config.document_masking else None
             curr_cache = cache_list[step]
 
             if self.trainer_config.use_ddp:
@@ -431,7 +431,7 @@ class Trainer:
         self,
         curr_tokens: torch.Tensor,
         curr_targets: torch.Tensor,
-        curr_documents: torch.Tensor,
+        curr_documents: torch.Tensor | None,
         curr_cache: DeCANTrainingCache,
     ):
         autocast_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
