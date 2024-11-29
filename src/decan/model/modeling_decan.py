@@ -787,7 +787,11 @@ class DeCANForCausalLM( DeCANPreTrainedModel, GenerationMixin ):
 
         # Perform final projection and compute logits
         hidden_states = self.final_proj( hidden_states )
-        logits = self.lm_head( hidden_states )
+
+        if not self.config.tie_word_embeddings:
+            logits = self.lm_head( hidden_states )
+        else:
+            logits = F.linear( hidden_states, self.model.embed_tokens.weight )
 
         if not return_dict:
             return ( logits, ) + outputs[ 1 : ]
