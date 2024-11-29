@@ -4,7 +4,12 @@
 from datetime import timedelta
 import os
 import shutil
+import json
+from json import JSONDecodeError
+import urllib
+import urllib.request
 
+import zstandard
 from langdetect import DetectorFactory, detect, LangDetectException
 
 import torch
@@ -13,7 +18,24 @@ from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
 from datasets import DownloadConfig, load_dataset, disable_progress_bar
+from datasets.builder import DatasetGenerationError
 from huggingface_hub import HfFileSystem
+
+def read_lines_zst(file_name):
+    with open(file_name, 'rb') as file_handle:
+        buffer = ''
+        reader = zstandard.ZstdDecompressor(max_window_size=2**31).stream_reader(file_handle)
+        while True:
+            chunk = reader.read(2**27).decode()
+            if not chunk:
+                break
+            lines = (buffer + chunk).split("\n")
+
+            for line in lines[:-1]:
+                yield line
+
+            buffer = lines[-1]
+        reader.close()
 
 class SlimPajamaClientDataset( IterableDataset ):
     def __init__(
@@ -115,7 +137,7 @@ class SlimPajamaClientDataset( IterableDataset ):
 
     def line_iterator( self ):        
         # Iterate from current shard until end of the dataset
-        for current_shard in range( self.starting_shard, 10_000 ):
+        for current_shard in range( self.starting_shard, 59_166 ):
             # Update current shard number to resume later (only worker zero updates this value)
             self.set_current_shard( current_shard )
 
@@ -123,32 +145,25 @@ class SlimPajamaClientDataset( IterableDataset ):
             url = self.get_url_from_shard( current_shard )
             
             # Download the parquet shard to a worker-indexed temporary cache
-            dataset = load_dataset(
-                'json',
-                data_files=url,
-                cache_dir=self.worker_cache_dir,
-                streaming=False,
-                download_config=DownloadConfig( max_retries=256 ),
-                split='train'
-            )
+            file_path = os.path.join( self.worker_cache_dir, 'shard.jsonl.zst' )
+            os.makedirs( self.worker_cache_dir )
+            urllib.request.urlretrieve( url, file_path )
 
             # Iterate over the entire parquet shard
-            for i, line in enumerate( dataset ):
-                assert isinstance( line, dict )
-                
+            for i, line in enumerate( read_lines_zst( file_path ) ):                
                 # Yield only if (iterator rank) % (number of workers in world) equals worker id
                 if i % ( self.num_procs * self.world_size ) == self.global_worker_id:
-                    text = line[ 'text' ]
-
                     try:
-                        lang = detect( text )
-                        if lang == 'en':
-                            yield line[ 'text' ]
-                    except LangDetectException:
+                        obj = json.loads(line)
+                        text = obj[ 'text' ]
+                        yield text
+                    except ( KeyError, JSONDecodeError ):
+                        # print()
+                        # print( f'shard={current_shard}, line={i}' )
                         pass
+                        
             
             # Delete in memory dataset and in cache dataset
-            del dataset
             shutil.rmtree( self.worker_cache_dir )
             
     def batch_iterator( self ):
