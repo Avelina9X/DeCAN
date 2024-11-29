@@ -8,14 +8,15 @@ trainer:
   wandb_tags:
     - pretrain
     - small
+    - decan
   
   micro_batch_size: 8
-  global_batch_size: 1920
+  global_batch_size: 480
 
-  max_steps: 25600 # 400 epochs @ 64 batches per epoch
+  max_steps: 102400
   warmup_steps: 2048
 
-  steps_per_epoch: 16
+  steps_per_epoch: 64
   validation_freq: 16
   temp_checkpoint_freq: 16
   perm_checkpoint_freq: 320
