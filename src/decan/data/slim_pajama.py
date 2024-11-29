@@ -256,7 +256,7 @@ class SlimPajamaDataset( IterableDataset ):
 
         self.master_store = TCPStore( self.server_ip, self.server_port, None, world_rank == 0, timeout=timedelta( seconds=30 ) )
         
-        self.master_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'common_corpus' )
+        self.master_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'slim_pajama' )
         
         self.cleanup_cache()
     
