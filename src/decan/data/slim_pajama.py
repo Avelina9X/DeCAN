@@ -58,7 +58,7 @@ class SlimPajamaClientDataset( IterableDataset ):
         self.world_size = world_size
         self.world_rank = world_rank
         
-        self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'common_corpus', f'worker_{self.global_worker_id}' )
+        self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'slim_pajama', f'worker_{self.global_worker_id}' )
 
         files = HfFileSystem().find( 'datasets/cerebras/SlimPajama-627B/train', detail=False )
         assert isinstance( files, list )

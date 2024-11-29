@@ -6,5 +6,9 @@ Contains iterable datasets and utility modules.
 
 
 from .common_corpus import (
-	CommonCorpusDataset,
+    CommonCorpusDataset,
+)
+
+from .slim_pajama import (
+    SlimPajamaDataset
 )
