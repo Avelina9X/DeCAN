@@ -37,6 +37,13 @@ DEFAULT_TCP_PORT = 15815
 
 class Trainer:
     def __init__( self, trainer_config: TrainerConfig, world_size: int, world_rank: int ):
+        # Set some performance flags
+        torch.backends.cuda.matmul.allow_tf32 = True # type: ignore # pylint: disable=W0212
+        torch.backends.cudnn.allow_tf32 = True # type: ignore # pylint: disable=W0212
+        torch._dynamo.config.cache_size_limit = 1024 * 1024 * 1024 # type: ignore # pylint: disable=W0212
+        torch._dynamo.config.optimize_ddp = False # type: ignore # pylint: disable=W0212
+        torch.backends.cuda.enable_cudnn_sdp( False )
+    
         self.trainer_config = trainer_config
         self.world_size = world_size
         self.world_rank = world_rank
