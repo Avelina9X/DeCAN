@@ -22,7 +22,7 @@ import wandb
 from model import DeCANConfig, DeCANForCausalLM
 from model.utils import load_tokenizer, set_pretrained_embeddings
 from model.modeling_decan import DeCANTrainingCache
-from data import CommonCorpusDataset
+from data import CommonCorpusDataset, SlimPajamaDataset
 
 from .utils import DDPModelWrapper, MeanMetric
 from .configuration_trainer import TrainerConfig
@@ -159,7 +159,7 @@ class Trainer:
         )
 
     def create_dataset( self ):
-        return CommonCorpusDataset(
+        return SlimPajamaDataset(
             tokenizer=self.tokenizer,
             seq_length=self.trainer_config.sequence_length,
             global_batch_size=self.trainer_config.global_batch_size,
