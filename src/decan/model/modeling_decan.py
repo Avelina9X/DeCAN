@@ -454,10 +454,12 @@ class DeCANDecoderLayer( nn.Module ):
 
         self.layer_idx = layer_idx
 
-        self.attention_input_norm = DeCANRMSNorm( config )
+        # self.attention_input_norm = DeCANRMSNorm( config )
+        self.attention_input_norm = nn.LayerNorm( config.hidden_size )
         self.attention = DeCANAttention( config, layer_idx )
 
-        self.mlp_input_norm = DeCANRMSNorm( config )
+        # self.mlp_input_norm = DeCANRMSNorm( config )
+        self.mlp_input_norm = nn.LayerNorm( config.hidden_size )
         self.mlp = DeCANMLP( config )
 
     def forward(
@@ -539,13 +541,15 @@ class DeCANModel( DeCANPreTrainedModel ):
         self.embed_rotary = DeCANRotaryEmbedding( config )
 
         self.input_proj = nn.Linear( config.vocab_dim, config.hidden_size, bias=False )
-        self.input_norm = DeCANRMSNorm( config )
+        # self.input_norm = DeCANRMSNorm( config )
+        self.input_norm = nn.LayerNorm( config.hidden_size )
 
         self.layers = nn.ModuleList( [
             DeCANDecoderLayer( config, layer_idx ) for layer_idx in range( config.num_hidden_layers )
         ] )
 
-        self.final_norm = DeCANRMSNorm( config )
+        # self.final_norm = DeCANRMSNorm( config )
+        self.final_norm = nn.LayerNorm( config.hidden_size )
 
         self.post_init()
 
