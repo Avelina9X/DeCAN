@@ -124,7 +124,7 @@ class SlimPajamaClientDataset( IterableDataset ):
             
             # Download the parquet shard to a worker-indexed temporary cache
             dataset = load_dataset(
-                'parquet',
+                'json',
                 data_files=url,
                 cache_dir=self.worker_cache_dir,
                 streaming=False,
