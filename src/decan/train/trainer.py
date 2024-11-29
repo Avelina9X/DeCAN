@@ -349,6 +349,7 @@ class Trainer:
                     metrics.update( {
                         'stats/training_step': self.training_step,
                         'stats/num_tokens': self.training_step * self.trainer_config.global_batch_size * self.trainer_config.sequence_length,
+                        'stats/learning_rate': self.get_learning_rate(),
                     } )
                     
                     wandb.log( metrics )
