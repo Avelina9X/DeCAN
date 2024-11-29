@@ -150,7 +150,7 @@ class SlimPajamaClientDataset( IterableDataset ):
             urllib.request.urlretrieve( url, file_path )
 
             # Iterate over the entire parquet shard
-            for i, line in enumerate( read_lines_zst( file_path ) ):                
+            for i, line in enumerate( read_lines_zst( file_path ) ):
                 # Yield only if (iterator rank) % (number of workers in world) equals worker id
                 if i % ( self.num_procs * self.world_size ) == self.global_worker_id:
                     try:
