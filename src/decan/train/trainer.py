@@ -41,7 +41,7 @@ class Trainer:
         torch.backends.cuda.matmul.allow_tf32 = True # type: ignore # pylint: disable=W0212
         torch.backends.cudnn.allow_tf32 = True # type: ignore # pylint: disable=W0212
         torch._dynamo.config.cache_size_limit = 1024 * 1024 * 1024 # type: ignore # pylint: disable=W0212
-        torch._dynamo.config.optimize_ddp = False # type: ignore # pylint: disable=W0212
+        torch._dynamo.config.optimize_ddp = True # type: ignore # pylint: disable=W0212
         torch.backends.cuda.enable_cudnn_sdp( False )
     
         self.trainer_config = trainer_config
