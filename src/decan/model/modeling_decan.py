@@ -164,7 +164,7 @@ class DeCANTrainingCache( Cache, DeCANCacheMixin ):
 
     def pre_trim( self, sequence_length: int ):
         new_length = self.max_cache_length - sequence_length
-        if self.document_ids is not None:
+        if hasattr( self, 'document_ids' ) and self.document_ids is not None:
             self.document_ids = self.document_ids[ :, -new_length : ]
 
         for i, ( key_cache, value_cache ) in enumerate( zip( self.key_cache, self.value_cache ) ):
