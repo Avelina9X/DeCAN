@@ -96,8 +96,8 @@ class CommonCorpusClientDataset( IterableDataset ):
             tokens = self.tokenizer.encode( text, add_special_tokens=False )
             
             # Add special tokens needed for training
-            tokens_x = [ self.tokenizer.bos_token_id ] + tokens + [ self.tokenizer.eos_token_id ]
-            tokens_y = tokens + [ self.tokenizer.eos_token_id, self.tokenizer.bos_token_id ]
+            tokens_x = [ self.tokenizer.eos_token_id ] + tokens
+            tokens_y = tokens + [ self.tokenizer.eos_token_id ]
 
             # Yield ( input, target ) tokens one-by-one
             for x, y in zip( tokens_x, tokens_y ):

@@ -19,9 +19,9 @@ def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
         'facebook/opt-125m',
         cache_dir=cache_dir or os.environ[ 'HF_CACHE_DIR' ],
         use_fast=True,
-        bos_token='<s>',
-        sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
-        cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
+        # bos_token='<s>',
+        # sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
+        # cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
         # add_eos_token=True,
     )
 
