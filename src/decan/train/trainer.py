@@ -296,7 +296,7 @@ class Trainer:
             ncols=100,
             unit='it',
             bar_format='{desc}: {percentage:.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]',
-            postfix=f"loss={self.metrics['loss'].compute():.3f}, acc={self.metrics['acc'].compute():.3f}",
+            postfix=f"loss={self.metrics['loss'].compute():.3f}, acc={self.metrics['acc'].compute():.3f}, lr={self.get_learning_rate():.3e}",
             prefix=f'Step {self.training_step}'
         )
 
