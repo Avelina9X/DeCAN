@@ -537,7 +537,7 @@ class DeCANModel( DeCANPreTrainedModel ):
         self.padding_idx: int = config.pad_token_id
         self.vocab_size: int = config.vocab_size
 
-        self.embed_tokens = nn.Embedding( config.vocab_size, config.vocab_dim, self.padding_idx )
+        self.embed_tokens = nn.Embedding( config.vocab_size, config.vocab_dim )
         self.embed_rotary = DeCANRotaryEmbedding( config )
 
         self.input_proj = nn.Linear( config.vocab_dim, config.hidden_size, bias=False )
