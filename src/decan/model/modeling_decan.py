@@ -379,9 +379,9 @@ class DeCANAttention( nn.Module ):
         B, L, _ = hidden_states.size() # pylint: disable=C0103
 
         # Project hidden states to qkv, reshape into heads, and swap the sequence and head dimensions
-        q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 )
-        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 )
-        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 )
+        q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
 
         # Update cache with new keys and values and return the stacked heads
         k_states, v_states = past_key_values.update(
@@ -412,7 +412,7 @@ class DeCANAttention( nn.Module ):
             attention_matrix = None
 
         # Transpose and combine heads
-        attn_output = attn_output.transpose( 1, 2 )
+        attn_output = attn_output.transpose( 1, 2 ).contiguous()
         attn_output = attn_output.view( B, L, self.head_dim * self.num_q_heads )
 
         # Project outputs for residual stream
@@ -460,12 +460,12 @@ class DeCANDecoderLayer( nn.Module ):
 
         self.layer_idx = layer_idx
 
-        self.attention_input_norm = DeCANRMSNorm( config )
-        # self.attention_input_norm = nn.LayerNorm( config.hidden_size )
+        # self.attention_input_norm = DeCANRMSNorm( config )
+        self.attention_input_norm = nn.LayerNorm( config.hidden_size )
         self.attention = DeCANAttention( config, layer_idx )
 
-        self.mlp_input_norm = DeCANRMSNorm( config )
-        # self.mlp_input_norm = nn.LayerNorm( config.hidden_size )
+        # self.mlp_input_norm = DeCANRMSNorm( config )
+        self.mlp_input_norm = nn.LayerNorm( config.hidden_size )
         self.mlp = DeCANMLP( config )
 
     def forward(
@@ -547,15 +547,15 @@ class DeCANModel( DeCANPreTrainedModel ):
         self.embed_rotary = DeCANRotaryEmbedding( config )
 
         self.input_proj = nn.Linear( config.vocab_dim, config.hidden_size, bias=False )
-        self.input_norm = DeCANRMSNorm( config )
-        # self.input_norm = nn.LayerNorm( config.hidden_size )
+        # self.input_norm = DeCANRMSNorm( config )
+        self.input_norm = nn.LayerNorm( config.hidden_size )
 
         self.layers = nn.ModuleList( [
             DeCANDecoderLayer( config, layer_idx ) for layer_idx in range( config.num_hidden_layers )
         ] )
 
-        self.final_norm = DeCANRMSNorm( config )
-        # self.final_norm = nn.LayerNorm( config.hidden_size )
+        # self.final_norm = DeCANRMSNorm( config )
+        self.final_norm = nn.LayerNorm( config.hidden_size )
 
         self.post_init()
 
