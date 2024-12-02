@@ -396,7 +396,7 @@ class DeCANAttention( nn.Module ):
         k_states = apply_rope( *position_embeddings, k_states )
 
         if output_attentions:
-            attention_matrix = torch.einsum( 'bhqd,bhkd->bhqk', q_states, k_states  ) * self.head_dim ** -0.5 + attention_mask.to( q_states.dtype ).log().repeat( 1, self.num_q_heads, 1, 1 )
+            attention_matrix = torch.einsum( 'bhqd,bhkd->bhqk', q_states, k_states  ) * self.head_dim ** -0.5 + attention_mask.to( q_states.dtype ).log()
             attention_matrix = attention_matrix.softmax( -1 )
 
             attn_output = torch.einsum( 'bhqk,bhkd->bhqd', attention_matrix, v_states )
@@ -406,7 +406,7 @@ class DeCANAttention( nn.Module ):
                 q_states,
                 k_states,
                 v_states,
-                attn_mask=attention_mask.to( q_states.dtype ).log().repeat( 1, self.num_q_heads, 1, 1 ),
+                attn_mask=attention_mask
             )
 
             attention_matrix = None
