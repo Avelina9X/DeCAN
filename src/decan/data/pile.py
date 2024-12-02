@@ -65,9 +65,9 @@ class PileShardDataset( IterableDataset ):
 
     @classmethod
     def line_token_generator( cls, path: str, tokenizer: PreTrainedTokenizerBase, shard_num: int, shard_id: int ):
-        for line in cls.line_parser( path, shard_num, shard_id ):
+        for d, line in enumerate( cls.line_parser( path, shard_num, shard_id ) ):
             for x, y in cls.tokenize_line( line, tokenizer ):
-                yield x, y
+                yield x, y, d
 
     @classmethod
     def sequence_generator( cls, path: str, tokenizer: PreTrainedTokenizerBase, shard_num: int, seq_length: int ):
@@ -75,28 +75,31 @@ class PileShardDataset( IterableDataset ):
             count = 0
             xs = []
             ys = []
+            ds = []
             for _ in range( shard_num ):
                 xs.append( [] )
                 ys.append( [] )
+                ds.append( [] )
 
-            return count, xs, ys
+            return count, xs, ys, ds
 
-        count, xs, ys = reset()
+        count, xs, ys, ds = reset()
 
         generators = [ iter( cls.line_token_generator( path, tokenizer, shard_num, i ) ) for i in range( shard_num ) ]
 
         try:
             while True:
                 for g_idx, generator in enumerate( generators ):
-                    x, y = next( generator )
+                    x, y, d = next( generator )
                     xs[ g_idx ].append( x )
                     ys[ g_idx ].append( y )
+                    ds[ g_idx ].append( d )
                 count += 1
 
                 if count == seq_length:
-                    yield ( torch.LongTensor( xs ), torch.LongTensor( ys ) )
+                    yield ( torch.LongTensor( xs ), torch.LongTensor( ys ), torch.LongTensor( ds ) )
 
-                    count, xs, ys = reset()
+                    count, xs, ys, ds = reset()
         except StopIteration:
             return
 
@@ -170,8 +173,9 @@ class PileDeviceDataset( IterableDataset ):
                 test_next = [ next( i ) for i in gen ]
                 test_next_x = torch.cat( [ i[0] for i in test_next ] )
                 test_next_y = torch.cat( [ i[1] for i in test_next ] )
+                test_next_d = torch.cat( [ i[2] for i in test_next ] )
 
-                yield test_next_x, test_next_y
+                yield test_next_x, test_next_y, test_next_d
         except StopIteration:
             return
 
