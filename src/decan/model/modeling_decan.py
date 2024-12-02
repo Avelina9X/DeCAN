@@ -375,8 +375,6 @@ class DeCANAttention( nn.Module ):
             tuple[torch.Tensor,torch.Tensor,Cache]: Tuple of (outputs, attention_weights, cache). When output_attention is `False` attention_weights is `None`.
         """
 
-        assert not output_attentions, "`output_attentions=True` is currently not supported with this SDPA implementation."
-
         # Get batch_size and q_len
         B, L, _ = hidden_states.size() # pylint: disable=C0103
 
@@ -397,13 +395,21 @@ class DeCANAttention( nn.Module ):
         q_states = apply_rope( *position_embeddings, q_states )
         k_states = apply_rope( *position_embeddings, k_states )
 
-        # Compute multi-head SDPA
-        attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
-            q_states,
-            k_states,
-            v_states,
-            attn_mask=attention_mask,
-        )
+        if output_attentions:
+            attention_matrix = torch.einsum( 'bhqd,bhkd->bhqk', q_states, k_states  ) * self.head_dim ** -0.5 + attention_mask.to( q_states.dtype ).log().repeat( 1, self.num_q_heads, 1, 1 )
+            attention_matrix = attention_matrix.softmax( -1 )
+
+            attn_output = torch.einsum( 'bhqk,bhkd->bhqd', attention_matrix, v_states )
+        else:
+            # Compute multi-head SDPA
+            attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
+                q_states,
+                k_states,
+                v_states,
+                attn_mask=attention_mask.to( q_states.dtype ).log().repeat( 1, self.num_q_heads, 1, 1 ),
+            )
+
+            attention_matrix = None
 
         # Transpose and combine heads
         attn_output = attn_output.transpose( 1, 2 ).contiguous()
@@ -412,7 +418,7 @@ class DeCANAttention( nn.Module ):
         # Project outputs for residual stream
         attn_output = self.o_proj( attn_output )
 
-        return attn_output, None, past_key_values
+        return attn_output, attention_matrix, past_key_values
 
 
 class DeCANMLP( nn.Module ):
