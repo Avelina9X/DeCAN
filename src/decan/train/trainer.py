@@ -14,6 +14,7 @@ from torch.optim import Optimizer, AdamW
 from torch.distributed.optim import ZeroRedundancyOptimizer
 
 from transformers import AutoTokenizer
+from transformers.utils import logging
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.modeling_outputs import CausalLMOutputWithPast
@@ -34,6 +35,8 @@ DEFAULT_DDP_PORT = '12355'
 # Default dataset TCPStore address and port
 DEFAULT_TCP_ADDR = 'localhost'
 DEFAULT_TCP_PORT = 15815
+
+logger = logging.get_logger( __name__ )
 
 class Trainer:
     def __init__( self, trainer_config: TrainerConfig, world_size: int, world_rank: int ):
@@ -454,7 +457,7 @@ class Trainer:
             valid_length = valid_tokens.float().sum( -1 ).clamp( min=1.0 )
 
             loss = torch.nn.functional.cross_entropy(
-                input=logits.transpose( 2, 1 ).float().contiguous(),
+                input=logits.transpose( 2, 1 ).float(),
                 target=curr_targets,
                 ignore_index=pad_token_id,
                 reduction='none'

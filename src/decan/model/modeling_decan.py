@@ -379,9 +379,9 @@ class DeCANAttention( nn.Module ):
         B, L, _ = hidden_states.size() # pylint: disable=C0103
 
         # Project hidden states to qkv, reshape into heads, and swap the sequence and head dimensions
-        q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
-        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
-        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 )
+        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 )
+        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 )
 
         # Update cache with new keys and values and return the stacked heads
         k_states, v_states = past_key_values.update(
@@ -412,7 +412,7 @@ class DeCANAttention( nn.Module ):
             attention_matrix = None
 
         # Transpose and combine heads
-        attn_output = attn_output.transpose( 1, 2 ).contiguous()
+        attn_output = attn_output.transpose( 1, 2 )
         attn_output = attn_output.view( B, L, self.head_dim * self.num_q_heads )
 
         # Project outputs for residual stream
