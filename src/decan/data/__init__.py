@@ -12,3 +12,7 @@ from .common_corpus import (
 from .slim_pajama import (
     SlimPajamaDataset
 )
+
+from .pile import (
+    PileDataset
+)
