@@ -39,7 +39,7 @@ class TrainerConfig:
 
     micro_batch_size: int = field( metadata={ 'help': 'Micro batch size of a single gradient accumulation step per device.' } )
     global_batch_size: int = field( default=2048, metadata={ 'help': 'The global batch size which may be sharded across multiple devices.' } )
-    # eval_batch_size: int = field( default=-1, metadata={ 'help': 'The batch size to use during validation. When set to -1 we use `micro_batch_size`.' } )
+    eval_batch_size: int = field( default=-1, metadata={ 'help': 'The batch size to use during validation. When set to -1 we use `micro_batch_size`.' } )
 
     max_steps: int = field( default=262144, metadata={ 'help': 'Maximum number of training steps.' } )
     warmup_steps: int = field( default=2048, metadata={ 'help': 'Number of warmup steps from 0 to lr_max.' } )
@@ -118,6 +118,10 @@ class TrainerConfig:
 
         # Compute the run name with potential UUID string replacements
         self.run_name = self.run_name.format( uuid=shortuuid.uuid()[ : 4 ] )
+
+        # Set eval batch size
+        if self.eval_batch_size == -1:
+            self.eval_batch_size = self.micro_batch_size
 
 
     @property
