@@ -14,6 +14,5 @@ from .slim_pajama import (
 )
 
 from .pile import (
-    PileDataset,
-    LegacyPileDataset
+    PileDataset
 )
