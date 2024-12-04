@@ -10,15 +10,13 @@ import urllib
 import urllib.request
 
 import zstandard
-from langdetect import DetectorFactory, detect, LangDetectException
 
 import torch
 from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
-from datasets import DownloadConfig, load_dataset, disable_progress_bar
-from datasets.builder import DatasetGenerationError
+from datasets import disable_progress_bar
 from huggingface_hub import HfFileSystem
 
 def read_lines_zst(file_name):
@@ -38,6 +36,12 @@ def read_lines_zst(file_name):
         reader.close()
 
 class SlimPajamaClientDataset( IterableDataset ):
+    """
+    SlimPajama Client IterableDataset which handles a single worker on a single device.
+    
+    Should be instantiated by the `SlimPajamaDataset` class to correctly set up arguments.
+    """
+    
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
@@ -65,6 +69,7 @@ class SlimPajamaClientDataset( IterableDataset ):
             local_worker_id (int): Local worker id of this process (NOT global worker id).
             world_size (int): Total number of devices in the group.
             world_rank (int): Global device rank.
+            files (list[str]): List of file shards to map shard index to remote URL.
         """
         self.tokenizer = tokenizer
         self.seq_length = seq_length
@@ -90,6 +95,8 @@ class SlimPajamaClientDataset( IterableDataset ):
         """ Sets the current shard number. Only effective on the first worker of the first device.
         
         Args:
+            global_worker_id (int): Global worker id across all workers and devices.
+            client_store (TCPStore): TCPStore instance for IPC.
             value (int): Zero indexed shard number.
         """
         if global_worker_id == 0:
@@ -100,6 +107,7 @@ class SlimPajamaClientDataset( IterableDataset ):
         """ Computes the HF url from an integer shard index.
 
         Args:
+            files (list[str]): List of file shards to map shard index to remote URL.
             index (int): Zero indexed shard number.
 
         Returns:
@@ -240,6 +248,14 @@ class SlimPajamaClientDataset( IterableDataset ):
         )
 
 class SlimPajamaDataset( IterableDataset ):
+    """
+    SlimPajama IterableDataset which spawns multiple workers on a single device.
+
+    This dataset dynamically downloads `.jsonl.zst` from HuggingFace and will automatically delete each shard when fully
+    consumed. This class manually handles splitting the batch size across multiple devices and automatically spawns
+    `SlimPajamaClientDataset` instances based on the desired number of worker processes.
+    """
+    
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
