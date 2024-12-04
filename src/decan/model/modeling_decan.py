@@ -280,6 +280,7 @@ class DeCANRotaryEmbedding( torch.nn.Module ):
 
         Args:
             embeddings (torch.Tensor): Token embeddings prior to entering transformer backbone.
+            document_ids (torch.Tensor, optional): Tensor of integers mapping sequence positions to document groups. If `None` document masking is disabled.
             past_key_values (Cache): KV cache container.
 
         Returns:
