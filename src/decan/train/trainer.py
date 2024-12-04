@@ -11,7 +11,6 @@ import torch
 import torch.distributed as dist
 from torch.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, AdamW
-from torch.distributed.optim import ZeroRedundancyOptimizer
 
 from transformers import AutoTokenizer
 from transformers.utils import logging
@@ -27,6 +26,8 @@ from data import CommonCorpusDataset, SlimPajamaDataset, PileDataset, LegacyPile
 
 from .utils import DDPModelWrapper, MeanMetric
 from .configuration_trainer import TrainerConfig
+
+from .evaluator import OWT10kEvaluator
 
 # Default DDP address and port
 DEFAULT_DDP_ADDR = 'localhost'
@@ -130,6 +131,15 @@ class Trainer:
             'acc': MeanMetric( trainer_config.use_ddp ),
         }
 
+        self.evaluator = OWT10kEvaluator(
+            self.model,
+            self.tokenizer,
+            self.trainer_config.eval_batch_size,
+            self.trainer_config.cache_length,
+            self.world_size,
+            self.world_rank,
+        )
+
     def create_optimizer( self ):
         # Get the decay parameters from model
         decay_parameters = get_parameter_names( self.model, [ *ALL_LAYERNORM_LAYERS, torch.nn.Embedding ] )
@@ -154,6 +164,7 @@ class Trainer:
 
         # Return wrapped ZeRO optimizer if enabled
         if self.trainer_config.use_zero_optimizer:
+            from torch.distributed.optim import ZeroRedundancyOptimizer
             return ZeroRedundancyOptimizer(
                 param_groups,
                 optimizer_cls,
@@ -169,17 +180,21 @@ class Trainer:
         )
 
     def create_dataset( self ):
-        return LegacyPileDataset(
-            tokenizer=self.tokenizer,
-            seq_length=self.trainer_config.sequence_length,
-            global_batch_size=self.trainer_config.global_batch_size,
-            starting_shard=self.starting_shard,
-            server_ip=DEFAULT_TCP_ADDR,
-            server_port=DEFAULT_TCP_PORT,
-            num_procs=self.trainer_config.num_workers_per_device,
-            world_size=self.world_size,
-            world_rank=self.world_rank,
-        )
+        match self.trainer_config.training_dataset:
+            case 'pile':
+                return PileDataset(
+                    tokenizer=self.tokenizer,
+                    seq_length=self.trainer_config.sequence_length,
+                    global_batch_size=self.trainer_config.global_batch_size,
+                    starting_shard=self.starting_shard,
+                    server_ip=DEFAULT_TCP_ADDR,
+                    server_port=DEFAULT_TCP_PORT,
+                    num_procs=self.trainer_config.num_workers_per_device,
+                    world_size=self.world_size,
+                    world_rank=self.world_rank,
+                )
+            case _:
+                raise ValueError( f'Dataset {self.trainer_config.training_dataset} is not a valid choice' )
 
     def load_trainer_state( self ):
         trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
@@ -190,8 +205,8 @@ class Trainer:
         # Set training step value
         self.training_step = trainer_state[ 'training_step' ]
 
-        # Set starting shard to the shard after what was saved (ensures data is never seen more than once)
-        self.starting_shard = trainer_state[ 'current_shard' ] + 1
+        # Set starting shard to the shard that was saved (which is by default the next shard)
+        self.starting_shard = trainer_state[ 'current_shard' ]
 
     def save_trainer_state( self ):
         trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
@@ -221,8 +236,7 @@ class Trainer:
 
         # If we're using zero we need to consolidate to rank zero
         if self.trainer_config.use_zero_optimizer:
-            assert isinstance( self.optimizer, ZeroRedundancyOptimizer )
-            self.optimizer.consolidate_state_dict( 0 )
+            self.optimizer.consolidate_state_dict( 0 ) # type: ignore
 
         # We can only save to disk if we're on rank zero
         if self.world_rank == 0:
@@ -343,15 +357,18 @@ class Trainer:
             progress_bar = self.progress_bar( time.time() - start_time)
             if self.world_rank == 0:
                 print( '\r' + progress_bar, end='', flush=True )
-            
+
+            do_eval = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.validation_freq ) == 0
             do_temp_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.temp_checkpoint_freq ) == 0
             do_perm_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.perm_checkpoint_freq ) == 0
             do_final_checkpoint = self.training_step % self.trainer_config.max_steps == 0
             do_log = self.training_step % self.trainer_config.steps_per_epoch == 0
 
-            # TODO: Eval step maybe???
+            if do_eval:
+                eval_metrics = { f'validation/{k}': v for k, v in self.evaluator.eval().items() }
+                metrics.update( eval_metrics )
 
-            if do_log or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
+            if do_log or do_eval or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 metrics.update( { f'train/{k}': v for k, v in self.reset_metrics().items() } )
 
                 if self.world_rank == 0:
