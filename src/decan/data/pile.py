@@ -1,22 +1,24 @@
+""" Pile dataset classes """
 
 from datetime import timedelta
-import os
-import shutil
 import json
 from json import JSONDecodeError
-
-
-from langdetect import DetectorFactory, detect, LangDetectException
 
 import torch
 from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
-from datasets import DownloadConfig, load_dataset, disable_progress_bar
+from datasets import disable_progress_bar
 
 
 class PileClientDataset( IterableDataset ):
+    """
+    Pile Client IterableDataset which handles a single worker on a single device.
+    
+    Should be instantiated by the `PileDataset` class to correctly set up arguments.
+    """
+
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
@@ -30,7 +32,7 @@ class PileClientDataset( IterableDataset ):
         world_size: int,
         world_rank: int,
     ):
-        """ SlimPajama iterable dataset for a single process on a single device.
+        """ Pile iterable dataset for a single process on a single device.
 
         Args:
             tokenizer (PreTrainedTokenizerBase): Text tokenizer.
@@ -52,10 +54,10 @@ class PileClientDataset( IterableDataset ):
         self.server_ip = server_ip
         self.server_port = server_port
         self.num_procs = num_procs
-        
+
         # Compute global worker id from the local worker id and the world rank
         self.global_worker_id = local_worker_id + num_procs * world_rank
-        
+
         self.world_size = world_size
         self.world_rank = world_rank
 
@@ -64,6 +66,8 @@ class PileClientDataset( IterableDataset ):
         """ Sets the current shard number. Only effective on the first worker of the first device.
         
         Args:
+            global_worker_id (int): Global worker id across all workers and devices.
+            client_store (TCPStore): TCPStore instance for IPC.
             value (int): Zero indexed shard number.
         """
         if global_worker_id == 0:
@@ -71,13 +75,13 @@ class PileClientDataset( IterableDataset ):
 
     @classmethod
     def get_url_from_shard( cls, index: int ) -> str:
-        """ Computes the HF url from an integer shard index.
+        """ Computes the local path from an integer shard index.
 
         Args:
             index (int): Zero indexed shard number.
 
         Returns:
-            str: Huggingface URL string.
+            str: Path to shard.
         """
         if index >= 30:
             raise ValueError( f'Shard index must be less than 30 but received {index}' )
@@ -93,22 +97,18 @@ class PileClientDataset( IterableDataset ):
         num_procs,
         global_worker_id,
         world_size
-    ):        
+    ):
         client_store = TCPStore( server_ip, server_port, None, False, timeout=timedelta( seconds=30 ) )
-        
+
         # Iterate from current shard until end of the dataset
         for current_shard in range( starting_shard, 30, num_procs * world_size ):
             # Update current shard number to resume later (only worker zero updates this value)
             cls.set_current_shard( global_worker_id, client_store, current_shard + num_procs * world_size )
 
-            # Get the URL from the shard index
-            url = cls.get_url_from_shard( current_shard )
-            
             # Get the file path from the shard index
             path = cls.get_url_from_shard( current_shard )
 
             with open( path, 'rt', encoding="utf-8", buffering=1 ) as file:
-
                 # Iterate over the entire parquet shard
                 for i, line in enumerate( file ):
                     try:
@@ -116,10 +116,9 @@ class PileClientDataset( IterableDataset ):
                         text = obj[ 'text' ]
                         yield text
                     except ( KeyError, JSONDecodeError ):
-                        # print()
-                        # print( f'shard={current_shard}, line={i}' )
-                        pass
-            
+                        print()
+                        print( f'JSON error @ shard={current_shard}, line={i}' )
+
     @classmethod
     def batch_iterator(
         cls,
@@ -156,7 +155,7 @@ class PileClientDataset( IterableDataset ):
                         tokens_x_container[i] += tokens_x
                         tokens_y_container[i] += tokens_y
                         tokens_d_container[i] += documet_ids
-                
+
                 output_x_container = [ [] for _ in range( worker_batch_size ) ]
                 output_y_container = [ [] for _ in range( worker_batch_size ) ]
                 output_d_container = [ [] for _ in range( worker_batch_size ) ]
@@ -170,14 +169,14 @@ class PileClientDataset( IterableDataset ):
 
                     output_d_container[i] = tokens_d_container[i][ : seq_length ]
                     tokens_d_container[i] = tokens_d_container[i][ seq_length : ]
-                
+
                 yield torch.LongTensor( output_x_container ), torch.LongTensor( output_y_container ), torch.LongTensor( output_d_container )
             except StopIteration:
                 return
 
     def __iter__( self ):
         disable_progress_bar()
-        
+
         return iter( self.batch_iterator(
             self.tokenizer,
             self.seq_length,
@@ -189,10 +188,10 @@ class PileClientDataset( IterableDataset ):
             self.global_worker_id,
             self.world_size
         ) )
-    
+
     def __getitem__( self, index ):
         return NotImplementedError( 'This dataset does not support random access using __getitem__' )
-    
+
     def as_data_loader( self ):
         return DataLoader(
             self,
@@ -202,6 +201,13 @@ class PileClientDataset( IterableDataset ):
         )
 
 class PileDataset( IterableDataset ):
+    """
+    Pile IterableDataset which spawns multiple workers on a single device.
+
+    This dataset automatically loads `.jsonl` files from disk, handles splitting the batch size across multiple devices,
+    and automatically spawns `PileClientDataset` instances based on the desired number of worker processes.
+    """
+
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
@@ -214,7 +220,7 @@ class PileDataset( IterableDataset ):
         world_size: int = 1,
         world_rank: int = 0,
     ):
-        """ SlimPajama iterable dataset for all processes on a single device.
+        """ Pile iterable dataset for all processes on a single device.
 
         Args:
             tokenizer (PreTrainedTokenizerBase): Text tokenizer.
@@ -235,17 +241,17 @@ class PileDataset( IterableDataset ):
         self.server_ip = server_ip
         self.server_port = server_port
         self.num_procs = num_procs
-        
+
         self.world_size = world_size
         self.world_rank = world_rank
-        
+
         if global_batch_size % ( num_procs * world_size ) != 0:
             raise ValueError( 'batch_size must be divisible by num_procs * world_size!' )
 
         self.master_store = TCPStore( self.server_ip, self.server_port, None, world_rank == 0, timeout=timedelta( seconds=30 ) )
-        
+
         self.cleanup_cache()
-    
+
     def cleanup_cache( self ):
         pass
 
@@ -266,7 +272,7 @@ class PileDataset( IterableDataset ):
             int: Zero indexed shard number.
         """
         return int( self.master_store.get( 'current_shard' ) )
-    
+
     def create_worker( self, idx: int ) -> DataLoader:
         """ Creates a worker DataLoader for this device.
 
@@ -288,7 +294,7 @@ class PileDataset( IterableDataset ):
             world_size=self.world_size,
             world_rank=self.world_rank,
         ).as_data_loader()
-    
+
     def __iter__( self ):
         # Create a worker iterator for each local process
         workers = [ iter( self.create_worker( i ) ) for i in range( self.num_procs ) ]
@@ -303,7 +309,7 @@ class PileDataset( IterableDataset ):
                 yield test_next_x, test_next_y, test_next_d
         except StopIteration:
             return
-    
+
     def __getitem__( self, index ):
         return NotImplementedError( 'This dataset does not support random access using __getitem__' )
 
