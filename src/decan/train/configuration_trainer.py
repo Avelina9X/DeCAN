@@ -4,14 +4,13 @@ from argparse import ArgumentParser
 import os
 import json
 from dataclasses import dataclass, field, fields, Field
-from typing import Any, Literal, Sequence
+from typing import Any, Literal
+from collections.abc import Sequence
 
 import shortuuid
 import torch
 
 from transformers.utils import logging
-
-logger = logging.get_logger( __name__ )
 
 from .utils import (
     field_parser,
@@ -19,6 +18,8 @@ from .utils import (
     recursive_dict_update,
     parse_yaml_file,
 )
+
+logger = logging.get_logger( __name__ )
 
 @dataclass
 class TrainerConfig:
