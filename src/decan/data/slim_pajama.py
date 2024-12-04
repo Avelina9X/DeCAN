@@ -50,6 +50,7 @@ class SlimPajamaClientDataset( IterableDataset ):
         local_worker_id: int,
         world_size: int,
         world_rank: int,
+        files: list[str],
     ):
         """ SlimPajama iterable dataset for a single process on a single device.
 
@@ -68,7 +69,7 @@ class SlimPajamaClientDataset( IterableDataset ):
         self.tokenizer = tokenizer
         self.seq_length = seq_length
         self.worker_batch_size = worker_batch_size
-        self.starting_shard = starting_shard
+        self.starting_shard = starting_shard + local_worker_id + num_procs * world_rank
 
         self.server_ip = server_ip
         self.server_port = server_port
@@ -82,20 +83,20 @@ class SlimPajamaClientDataset( IterableDataset ):
         
         self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'slim_pajama', f'worker_{self.global_worker_id}' )
 
-        files = HfFileSystem().find( 'datasets/cerebras/SlimPajama-627B/train', detail=False )
-        assert isinstance( files, list )
         self.files = files
-    
-    def set_current_shard( self, value: int ):
+
+    @classmethod
+    def set_current_shard( cls, global_worker_id: int, client_store: TCPStore, value: int ):
         """ Sets the current shard number. Only effective on the first worker of the first device.
         
         Args:
             value (int): Zero indexed shard number.
         """
-        if self.global_worker_id == 0:
-            self.client_store.set( 'current_shard', str( value ) )
-    
-    def get_url_from_shard( self, index: int ) -> str:
+        if global_worker_id == 0:
+            client_store.set( 'current_shard', str( value ) )
+
+    @classmethod
+    def get_url_from_shard( cls, files: list[str], index: int ) -> str:
         """ Computes the HF url from an integer shard index.
 
         Args:
@@ -108,114 +109,124 @@ class SlimPajamaClientDataset( IterableDataset ):
             raise ValueError( f'Shard index must be less than 10,000 but received {index}' )
         
         base_path = 'https://huggingface.co/datasets/cerebras/SlimPajama-627B/resolve/main/'
-        shard_path = self.files[index].removeprefix( 'datasets/cerebras/SlimPajama-627B/' )
+        shard_path = files[index].removeprefix( 'datasets/cerebras/SlimPajama-627B/' )
 
         return base_path + shard_path
-    
-    def tokenize_line( self, iterator ):
-        document = 0
-        while True:
-            # Get the next line from the shared iterator
-            text = next( iterator )
-            
-            # Tokenize without additional special tokens
-            tokens = self.tokenizer.encode( text, add_special_tokens=False )
-            
-            # Add special tokens needed for training
-            tokens_x = [ self.tokenizer.eos_token_id ] + tokens
-            tokens_y = tokens + [ self.tokenizer.eos_token_id ]
 
-            # Yield ( input, target ) tokens one-by-one
-            for x, y in zip( tokens_x, tokens_y ):
-                yield ( x, y, document )
-                document += 1
-            
-            # Cleanup because I don't trust generators
-            del text
-            del tokens_x
-            del tokens_y
-
-    def line_iterator( self ):        
+    @classmethod
+    def line_iterator(
+        cls,
+        starting_shard,
+        server_ip,
+        server_port,
+        num_procs,
+        global_worker_id,
+        world_size,
+        worker_cache_dir,
+        files,
+    ):        
+        client_store = TCPStore( server_ip, server_port, None, False, timeout=timedelta( seconds=30 ) )
+        
         # Iterate from current shard until end of the dataset
-        for current_shard in range( self.starting_shard, 59_166 ):
+        for current_shard in range( starting_shard, 59_166, num_procs * world_size ):
             # Update current shard number to resume later (only worker zero updates this value)
-            self.set_current_shard( current_shard )
+            cls.set_current_shard( global_worker_id, client_store, current_shard + num_procs * world_size )
 
             # Get the URL from the shard index
-            url = self.get_url_from_shard( current_shard )
+            url = cls.get_url_from_shard( files, current_shard )
             
             # Download the parquet shard to a worker-indexed temporary cache
-            file_path = os.path.join( self.worker_cache_dir, 'shard.jsonl.zst' )
-            os.makedirs( self.worker_cache_dir )
+            file_path = os.path.join( worker_cache_dir, f'shard_{current_shard}.jsonl.zst' )
+            os.makedirs( worker_cache_dir, exist_ok=True )
             urllib.request.urlretrieve( url, file_path )
 
             # Iterate over the entire parquet shard
             for i, line in enumerate( read_lines_zst( file_path ) ):
-                # Yield only if (iterator rank) % (number of workers in world) equals worker id
-                if i % ( self.num_procs * self.world_size ) == self.global_worker_id:
-                    try:
-                        obj = json.loads(line)
-                        text = obj[ 'text' ]
-                        yield text
-                    except ( KeyError, JSONDecodeError ):
-                        # print()
-                        # print( f'shard={current_shard}, line={i}' )
-                        pass
+                try:
+                    obj = json.loads(line)
+                    text = obj[ 'text' ]
+                    yield text
+                except ( KeyError, JSONDecodeError ):
+                    print()
+                    print( f'JSON error @ shard={current_shard}, line={i}' )
                         
             
             # Delete in memory dataset and in cache dataset
-            shutil.rmtree( self.worker_cache_dir )
-            
-    def batch_iterator( self ):
+            shutil.rmtree( worker_cache_dir )
+
+    @classmethod
+    def batch_iterator(
+        cls,
+        tokenizer,
+        seq_length,
+        worker_batch_size,
+        starting_shard,
+        server_ip,
+        server_port,
+        num_procs,
+        global_worker_id,
+        world_size,
+        worker_cache_dir,
+        files,
+    ):
+        print( f'{seq_length=} {worker_batch_size=} {starting_shard=} {num_procs=} {global_worker_id=} {world_size=}')
         # Create iterator over all lines in all shards
-        iterator = iter( self.line_iterator() )
+        iterator = enumerate( cls.line_iterator( starting_shard, server_ip, server_port, num_procs, global_worker_id, world_size, worker_cache_dir, files, ) )
 
-        # Reset function for token yielding
-        def reset():
-            count = 0
-            xs = []
-            ys = []
-            ds = []
-            for _ in range( self.worker_batch_size ):
-                xs.append( [] )
-                ys.append( [] )
-                ds.append( [] )
+        tokens_x_container = [ [] for _ in range( worker_batch_size ) ]
+        tokens_y_container = [ [] for _ in range( worker_batch_size ) ]
+        tokens_d_container = [ [] for _ in range( worker_batch_size ) ]
 
-            return count, xs, ys, ds
+        while True:
+            try:
+                for i in range( worker_batch_size ):
+                    while len( tokens_x_container[i] ) < seq_length:
+                        document_id, document = next( iterator )
+                        text = document
 
-        # Initialise token count, inputs and targets
-        count, xs, ys, ds = reset()
+                        tokens_raw = tokenizer.encode( text, add_special_tokens=False )
+                        tokens_x = [ tokenizer.bos_token_id ] + tokens_raw
+                        tokens_y = tokens_raw + [ tokenizer.bos_token_id ]
+                        documet_ids = [ document_id ] * len( tokens_x )
 
-        # Create a tokenizer iterator for each line in the micro batch
-        generators = [ iter( self.tokenize_line( iterator ) ) for _ in range( self.worker_batch_size ) ]
+                        tokens_x_container[i] += tokens_x
+                        tokens_y_container[i] += tokens_y
+                        tokens_d_container[i] += documet_ids
+                
+                output_x_container = [ [] for _ in range( worker_batch_size ) ]
+                output_y_container = [ [] for _ in range( worker_batch_size ) ]
+                output_d_container = [ [] for _ in range( worker_batch_size ) ]
 
-        try:
-            while True:
-                # Continuously add new tokens to the batch
-                for g_idx, generator in enumerate( generators ):
-                    x, y, d = next( generator )
-                    xs[ g_idx ].append( x )
-                    ys[ g_idx ].append( y )
-                    ds[ g_idx ].append( d )
-                count += 1
+                for i in range( worker_batch_size ):
+                    output_x_container[i] = tokens_x_container[i][ : seq_length ]
+                    tokens_x_container[i] = tokens_x_container[i][ seq_length : ]
 
-                # When maximum sequence length is reached, yield the micro batch and reset
-                if count == self.seq_length:
-                    yield ( torch.LongTensor( xs ), torch.LongTensor( ys ), torch.LongTensor( ds ) )
+                    output_y_container[i] = tokens_y_container[i][ : seq_length ]
+                    tokens_y_container[i] = tokens_y_container[i][ seq_length : ]
 
-                    count, xs, ys, ds = reset()
-        except StopIteration:
-            return
-
+                    output_d_container[i] = tokens_d_container[i][ : seq_length ]
+                    tokens_d_container[i] = tokens_d_container[i][ seq_length : ]
+                
+                yield torch.LongTensor( output_x_container ), torch.LongTensor( output_y_container ), torch.LongTensor( output_d_container )
+            except StopIteration:
+                return
+            
     def __iter__( self ):
         disable_progress_bar()
-        self.client_store = TCPStore( self.server_ip, self.server_port, None, False, timeout=timedelta( seconds=30 ) )
-
-        # Reset lang detect seed
-        DetectorFactory.seed = 0
         
-        for batch in iter( self.batch_iterator() ):
-            yield batch
+        return iter( self.batch_iterator(
+            self.tokenizer,
+            self.seq_length,
+            self.worker_batch_size,
+            self.starting_shard,
+            self.server_ip,
+            self.server_port,
+            self.num_procs,
+            self.global_worker_id,
+            self.world_size,
+            self.worker_cache_dir,
+            self.files,
+        ) )
     
     def __getitem__( self, index ):
         return NotImplementedError( 'This dataset does not support random access using __getitem__' )
@@ -223,7 +234,7 @@ class SlimPajamaClientDataset( IterableDataset ):
     def as_data_loader( self ):
         return DataLoader(
             self,
-            batch_size=1,
+            batch_size=None,
             num_workers=1,
             prefetch_factor=16,
         )
@@ -272,6 +283,10 @@ class SlimPajamaDataset( IterableDataset ):
         self.master_store = TCPStore( self.server_ip, self.server_port, None, world_rank == 0, timeout=timedelta( seconds=30 ) )
         
         self.master_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'slim_pajama' )
+
+        files = HfFileSystem().find( 'datasets/cerebras/SlimPajama-627B/train', detail=False )
+        assert isinstance( files, list )
+        self.files = files
         
         self.cleanup_cache()
     
@@ -321,6 +336,7 @@ class SlimPajamaDataset( IterableDataset ):
             local_worker_id=idx,
             world_size=self.world_size,
             world_rank=self.world_rank,
+            files=self.files,
         ).as_data_loader()
     
     def __iter__( self ):
@@ -329,20 +345,12 @@ class SlimPajamaDataset( IterableDataset ):
 
         try:
             while True:
-                xs = []
-                ys = []
-                ds = []
-                
-                # Continuously add new micro batches to the sub batch
-                for worker in workers:
-                    x, y, d = next( worker )
+                test_next = [ next( i ) for i in workers ]
+                test_next_x = torch.cat( [ i[0] for i in test_next ] )
+                test_next_y = torch.cat( [ i[1] for i in test_next ] )
+                test_next_d = torch.cat( [ i[2] for i in test_next ] )
 
-                    xs.append( x[0] )
-                    ys.append( y[0] )
-                    ds.append( d[0] )
-                
-                # Yield sub batch when full
-                yield torch.cat( xs ), torch.cat( ys ), torch.cat( ds )
+                yield test_next_x, test_next_y, test_next_d
         except StopIteration:
             return
     
