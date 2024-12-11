@@ -40,6 +40,8 @@ DEFAULT_TCP_PORT = 15815
 logger = logging.get_logger( __name__ )
 
 class Trainer:
+    """ DeCAN trainer class """
+    
     def __init__( self, trainer_config: TrainerConfig, world_size: int, world_rank: int ):
         # Set some performance flags
         torch.backends.cuda.matmul.allow_tf32 = True # type: ignore # pylint: disable=W0212
