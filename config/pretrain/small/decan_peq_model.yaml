@@ -12,8 +12,8 @@ model:
   rope_theta: 500000
   rope_scaling: {}
   tie_word_embeddings: True
-  attention_bias: True
-  mlp_bias: True
+  attention_bias: False
+  mlp_bias: False
   initializer_range: 0.02
   rms_norm_eps: 1.0e-6
   use_cache: True
