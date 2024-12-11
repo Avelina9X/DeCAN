@@ -205,6 +205,18 @@ class Trainer:
                     world_size=self.world_size,
                     world_rank=self.world_rank,
                 )
+            case 'common_corpus':
+                return CommonCorpusDataset(
+                    tokenizer=self.tokenizer,
+                    seq_length=self.trainer_config.sequence_length,
+                    global_batch_size=self.trainer_config.global_batch_size,
+                    starting_shard=self.starting_shard,
+                    server_ip=DEFAULT_TCP_ADDR,
+                    server_port=DEFAULT_TCP_PORT,
+                    num_procs=self.trainer_config.num_workers_per_device,
+                    world_size=self.world_size,
+                    world_rank=self.world_rank,
+                )
             case _:
                 raise ValueError( f'Dataset {self.trainer_config.training_dataset} is not a valid choice' )
 
