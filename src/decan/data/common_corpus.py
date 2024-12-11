@@ -161,6 +161,9 @@ class CommonCorpusClientDataset( IterableDataset ):
         world_size,
         worker_cache_dir,
     ):
+        # Disable the HF progress bar
+        disable_progress_bar()
+        
         # Reset lang detect seed
         DetectorFactory.seed = 0
         
@@ -206,9 +209,7 @@ class CommonCorpusClientDataset( IterableDataset ):
             except StopIteration:
                 return
             
-    def __iter__( self ):
-        disable_progress_bar()
-        
+    def __iter__( self ):        
         return iter( self.batch_iterator(
             self.tokenizer,
             self.seq_length,

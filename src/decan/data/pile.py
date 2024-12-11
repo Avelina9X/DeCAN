@@ -9,7 +9,6 @@ from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
-from datasets import disable_progress_bar
 
 
 class PileClientDataset( IterableDataset ):
@@ -175,8 +174,6 @@ class PileClientDataset( IterableDataset ):
                 return
 
     def __iter__( self ):
-        disable_progress_bar()
-
         return iter( self.batch_iterator(
             self.tokenizer,
             self.seq_length,

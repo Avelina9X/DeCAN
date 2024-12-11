@@ -16,7 +16,6 @@ from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
-from datasets import disable_progress_bar
 from huggingface_hub import HfFileSystem
 
 def read_lines_zst(file_name):
@@ -219,9 +218,7 @@ class SlimPajamaClientDataset( IterableDataset ):
             except StopIteration:
                 return
             
-    def __iter__( self ):
-        disable_progress_bar()
-        
+    def __iter__( self ):        
         return iter( self.batch_iterator(
             self.tokenizer,
             self.seq_length,
