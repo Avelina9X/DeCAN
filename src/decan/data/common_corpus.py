@@ -412,7 +412,7 @@ class CommonCorpusClientDataset( IterableDataset ):
             client_store.set( 'current_shard', str( value ) )
 
     @classmethod
-    def get_url_from_shard( self, index: int ) -> str:
+    def get_url_from_shard( cls, index: int ) -> str:
         """ Computes the HF url from an integer shard index.
 
         Args:
