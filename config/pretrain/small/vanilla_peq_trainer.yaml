@@ -17,8 +17,8 @@ trainer:
   warmup_steps: 2048
 
   steps_per_epoch: 64
-  validation_freq: 16
-  temp_checkpoint_freq: 16
+  validation_freq: 8
+  temp_checkpoint_freq: 8
   perm_checkpoint_freq: 320
 
   # epochs_per_session
