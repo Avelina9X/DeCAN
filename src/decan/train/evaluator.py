@@ -125,7 +125,7 @@ class OWT10kEvaluator( Evaluator ):
         datasets.disable_progress_bar()
 
         dataset = datasets.load_dataset( 'stas/openwebtext-10k', split='train', cache_dir=os.environ[ 'HF_CACHE_DIR' ] )
-        dataset_shard = dataset.shard( self.world_size, self.world_rank ).map( token_func, remove_columns='text' ) # type: ignore
+        dataset_shard = dataset.shard( self.world_size, self.world_rank ).map( token_func, remove_columns='text', keep_in_memory=True ) # type: ignore
         return dataset_shard.batch( self.eval_batch_size, drop_last_batch=True ) # type: ignore
         
 
