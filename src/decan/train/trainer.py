@@ -1,10 +1,14 @@
 """ Trainer module for training DeCAN models """
 
 import os
+from os import devnull
 import time
 from typing import Literal
+from contextlib import contextmanager,redirect_stderr,redirect_stdout
 
 import tqdm
+import wandb
+import binpacking
 import numpy as np
 
 import torch
@@ -12,12 +16,15 @@ import torch.distributed as dist
 from torch.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, AdamW
 
+import datasets
 from transformers import AutoTokenizer
 from transformers.utils import logging
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.modeling_outputs import CausalLMOutputWithPast
-import wandb
+
+from lm_eval.models.huggingface import HFLM, eval_logger
+from lm_eval.evaluator import simple_evaluate
 
 from model import DeCANConfig, DeCANForCausalLM
 from model.utils import load_tokenizer, set_pretrained_embeddings
@@ -28,6 +35,13 @@ from .utils import DDPModelWrapper, MeanMetric
 from .configuration_trainer import TrainerConfig
 
 from .evaluator import OWT10kEvaluator
+
+@contextmanager
+def suppress_stdout_stderr():
+    """A context manager that redirects stdout and stderr to devnull"""
+    with open(devnull, 'w') as fnull:
+        with redirect_stderr(fnull) as err, redirect_stdout(fnull) as out:
+            yield (err, out)
 
 # Default DDP address and port
 DEFAULT_DDP_ADDR = 'localhost'
@@ -49,6 +63,10 @@ class Trainer:
         torch._dynamo.config.cache_size_limit = 1024 * 1024 * 1024 # type: ignore # pylint: disable=W0212
         torch._dynamo.config.optimize_ddp = True # type: ignore # pylint: disable=W0212
         torch.backends.cuda.enable_cudnn_sdp( False )
+        
+        datasets.config.HF_DATASETS_TRUST_REMOTE_CODE = True # type: ignore
+        datasets.disable_progress_bar()
+        eval_logger.setLevel( 'ERROR' )
     
         self.trainer_config = trainer_config
         self.world_size = world_size
@@ -142,6 +160,27 @@ class Trainer:
             self.world_rank,
         )
 
+        self.eval_model = HFLM(
+            pretrained=self.model,
+            tokenizer=self.tokenizer,
+            add_bos_token=True,
+            dtype=torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16,
+            batch_size=self.trainer_config.eval_batch_size,
+            backend='causal'
+        )
+
+        eval_task_distribution = {
+            'hellaswag': 10042,
+            'openbookqa': 500,
+            'winogrande': 1267,
+            'arc_easy': 2376,
+            'arc_challenge': 1172,
+            'boolq': 3270,
+            'piqa': 1838,
+        }
+
+        self.eval_tasks = list( binpacking.to_constant_bin_number( eval_task_distribution, self.world_size )[ self.world_rank ].keys() )
+
     def create_optimizer( self ):
         # Get the decay parameters from model
         decay_parameters = get_parameter_names( self.model, [ *ALL_LAYERNORM_LAYERS, torch.nn.Embedding ] )
@@ -166,7 +205,7 @@ class Trainer:
 
         # Return wrapped ZeRO optimizer if enabled
         if self.trainer_config.use_zero_optimizer:
-            from torch.distributed.optim import ZeroRedundancyOptimizer
+            from torch.distributed.optim import ZeroRedundancyOptimizer # pylint: disable=C0415
             return ZeroRedundancyOptimizer(
                 param_groups,
                 optimizer_cls,
@@ -343,6 +382,37 @@ class Trainer:
             prefix=f'Step {self.training_step}'
         )
 
+    def lm_eval( self ):
+        self.model.eval()
+
+        with suppress_stdout_stderr():
+            eval_results = simple_evaluate(
+                self.eval_model,
+                tasks=self.eval_tasks,
+                device='cuda',
+                log_samples=False,
+                batch_size=self.trainer_config.eval_batch_size,
+                verbosity='ERROR',
+            )[ 'results' ] # type: ignore
+
+        if self.world_size > 1:
+            if self.world_rank > 0:
+                dist.send_object_list( [ eval_results ], dst=0 )
+            else:
+                for rank in range( 1, self.world_size ):
+                    rcv_list = [ {} ]
+                    dist.recv_object_list( rcv_list, rank )
+                    eval_results.update( rcv_list[0] )
+        
+        flat_metrics = {}
+
+        for task, metrics in eval_results.items():
+            for metric_name, value in metrics.items():
+                if metric_name != 'alias' and '_stderr' not in metric_name:
+                    flat_metrics[ f'{task}/{metric_name}' ] = value
+
+        return flat_metrics
+
     def train( self ):
         # Create dataloader
         dataloader = self.dataset.as_data_loader()
@@ -392,7 +462,9 @@ class Trainer:
 
             if do_eval:
                 eval_metrics = { f'validation/{k}': v for k, v in self.evaluator.eval().items() }
+                lm_eval_metrics = { f'validation/{k}': v for k, v in self.lm_eval().items() }
                 metrics.update( eval_metrics )
+                metrics.update( lm_eval_metrics )
 
             if do_log or do_eval or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 metrics.update( { f'train/{k}': v for k, v in self.reset_metrics().items() } )
