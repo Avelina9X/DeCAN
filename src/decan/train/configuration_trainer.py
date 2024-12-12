@@ -50,7 +50,7 @@ class TrainerConfig:
     temp_checkpoint_freq: int = field( default=4, metadata={ 'help': 'Number of `epochs` that must pass before saving a temporary checkpoint.' } )
     perm_checkpoint_freq: int = field( default=64, metadata={ 'help': 'Number of `epochs` that must pass before saving a permanent checkpoint.' } )
 
-    training_dataset: str = field( default='common_corpus', metadata={ 'help': 'Training dataset to use.' } )
+    training_dataset: str = field( default='slim_pajama', metadata={ 'help': 'Training dataset to use.' } )
 
     epochs_per_session: int = field( default=-1, metadata={
         'help': 'Number of `epochs` that must pass before we end the close the session. When set to -1 we end after `max_steps` have passed.',
