@@ -181,7 +181,9 @@ class Trainer:
 
         self.eval_tasks = list( binpacking.to_constant_bin_number( eval_task_distribution, self.world_size )[ self.world_rank ].keys() )
 
-    def create_optimizer( self ):
+    def create_optimizer( self ) -> Optimizer:
+        """ Returns the optimizer specified by the trainer config """
+        
         # Get the decay parameters from model
         decay_parameters = get_parameter_names( self.model, [ *ALL_LAYERNORM_LAYERS, torch.nn.Embedding ] )
         decay_parameters = [ name for name in decay_parameters if 'bias' not in name ]
@@ -221,6 +223,8 @@ class Trainer:
         )
 
     def create_dataset( self ):
+        """ Returns the dataset specified by the trainer config """
+        
         match self.trainer_config.training_dataset:
             case 'pile':
                 return PileDataset(
@@ -261,20 +265,19 @@ class Trainer:
             case _:
                 raise ValueError( f'Dataset {self.trainer_config.training_dataset} is not a valid choice' )
 
-    def load_trainer_state( self ):
-        trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
-
+    def load_trainer_state( self ) -> None:
+        """ Loads the strainer state from trainer_state.pt"""
+        
         # Load state dict
+        trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
         trainer_state = torch.load( trainer_state_path, weights_only=True )
 
-        # Set training step value
+        # Set training step and starting shard
         self.training_step = trainer_state[ 'training_step' ]
-
-        # Set starting shard to the shard that was saved (which is by default the next shard)
         self.starting_shard = trainer_state[ 'current_shard' ]
 
-    def save_trainer_state( self ):
-        trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
+    def save_trainer_state( self ) -> None:
+        """ Saves the trainer state to trainer_state.pt and trainer.json """
 
         # Save training_step and current_shard into state dict
         state_dict = {
@@ -284,20 +287,20 @@ class Trainer:
 
         # Save state dict and config to disk only on rank zero
         if self.world_rank == 0:
+            trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
             torch.save( state_dict, trainer_state_path )
             self.trainer_config.save_config( self.trainer_config.curr_checkpoint_dir )
 
-    def load_optimizer_state( self ):
+    def load_optimizer_state( self ) -> None:
+        """ Loads optimizer state from optimizer_state.pt """
+
+        # Load the state dict from disk and set optimizer state
         optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
-
-        # Load the state dict from disk
         state_dict = torch.load( optimizer_state_path, weights_only=True )
-
-        # Set the optimizer state
         self.optimizer.load_state_dict( state_dict )
 
-    def save_optimizer_state( self ):
-        optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
+    def save_optimizer_state( self ) -> None:
+        """ Saves optimizer state to optimizer_state.pt """
 
         # If we're using zero we need to consolidate to rank zero
         if self.trainer_config.use_zero_optimizer:
@@ -305,27 +308,37 @@ class Trainer:
 
         # We can only save to disk if we're on rank zero
         if self.world_rank == 0:
+            optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
             state_dict = self.optimizer.state_dict()
             torch.save( state_dict, optimizer_state_path )
 
-    def load_scaler_state( self ):
+    def load_scaler_state( self ) -> None:
+        """ Loads the mixed precision scaler from scaler_state.pt """
+
+        # Load the state dict from disk and set scaler state
         scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
-
-        # Load the state dict from disk
         state_dict = torch.load( scaler_state_path, weights_only=True )
-
-        # Set the scaler state
         self.optimizer_scaler.load_state_dict( state_dict )
 
-    def save_scaler_state( self ):
-        scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
+    def save_scaler_state( self ) -> None:
+        """ Saves the mixed precision scaler from scaler_state.pt """
 
-        # We can only save to disk if we're on rank zero
+        # We can only save to disk if we're on rank zero, but should we? There is no consolidation mechanic...
         if self.world_rank == 0:
+            scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
             state_dict = self.optimizer_scaler.state_dict()
             torch.save( state_dict, scaler_state_path )
 
-    def save_temp_checkpoint( self ):
+    def save_temp_checkpoint( self ) -> None:
+        """ Saves, and maybe overwrites, a temporay checkpoint.
+        This saves the:
+        - trainer state (trainer_state.pt, trainer.json)
+        - optimizer state (optimizer_state.pt)
+        - scaler state (scaler_state.pt)
+        - tokenizer files and config
+        - model weights (FP32) and config
+        """
+        
         self.save_trainer_state()
         self.save_optimizer_state()
         self.save_scaler_state()
@@ -334,18 +347,32 @@ class Trainer:
         self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
         self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
 
-    def save_perm_checkpoint( self ):
+    def save_perm_checkpoint( self ) -> None:
+        """ Saves a permanent checkpoint, indexed by the training step.
+        This saves the:
+        - tokenizer files and config
+        - model weights (FP32) and config
+        """
+        
         save_dir = self.trainer_config.perm_checkpoint_dir( self.training_step )
         self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
         self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
 
-    def save_final_checkpoint( self ):
+    def save_final_checkpoint( self ) -> None:
+        """ Saves the final model checkpoint once training is done.
+        This saves the:
+        - tokenizer files and config
+        - model weights (BF16/FP16) and config
+        """
+        
         save_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
         save_dir = self.trainer_config.final_checkpoint_dir
         self.model.to( dtype=save_dtype ).save_pretrained( save_dir, is_main_process=self.world_rank==0 ) # type: ignore
         self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
 
     def get_learning_rate( self ) -> float:
+        """ Computes the learning rate at the current step and returns it as a float"""
+        
         warmup_ratio = min( self.training_step / self.trainer_config.warmup_steps, 1.0 )
         warmup_lr = warmup_ratio * self.trainer_config.lr_max
         
@@ -356,13 +383,17 @@ class Trainer:
         return min( warmup_lr, cooldown_lr )
 
     def reset_metrics( self ) -> dict[str, float]:
+        """ Resets all metrics in the state dict and returns their current values. """
+        
         stats = {}
         for name, metric in self.metrics.items():
             stats[name] = float( metric.compute() )
             metric.reset()
         return stats
 
-    def cleanup( self ):
+    def cleanup( self ) -> None:
+        """ Runs cleanup at the end of training. """
+        
         # Cleanup DDP processes if we're using DDP
         if self.trainer_config.use_ddp:
             dist.destroy_process_group()
@@ -370,7 +401,7 @@ class Trainer:
         # Cleanup dataset cache
         self.dataset.cleanup_cache()
 
-    def progress_bar( self, elapsed ):
+    def progress_bar( self, elapsed: float ) -> str:
         return tqdm.tqdm.format_meter(
             n=( ( self.training_step - 1 ) % self.trainer_config.steps_per_epoch ) + 1,
             total=self.trainer_config.steps_per_epoch,
