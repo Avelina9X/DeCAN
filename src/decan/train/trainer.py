@@ -179,7 +179,7 @@ class Trainer:
             'piqa': 1838,
         }
 
-        self.eval_tasks = list( binpacking.to_constant_bin_number( eval_task_distribution, self.world_size )[ self.world_rank ].keys() )
+        self.eval_tasks = list( binpacking.to_constant_bin_number( eval_task_distribution, self.world_size )[ self.world_rank ].keys() ) # type: ignore
 
     def create_optimizer( self ) -> Optimizer:
         """ Returns the optimizer specified by the trainer config """
@@ -296,7 +296,7 @@ class Trainer:
 
         # Load the state dict from disk and set optimizer state
         optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
-        state_dict = torch.load( optimizer_state_path, weights_only=True )
+        state_dict = torch.load( optimizer_state_path )
         self.optimizer.load_state_dict( state_dict )
 
     def save_optimizer_state( self ) -> None:
@@ -380,7 +380,7 @@ class Trainer:
         cooldown_alpha = np.cos( cooldown_ratio * np.pi ) * 0.5 + 0.5
         cooldown_lr = self.trainer_config.lr_max * cooldown_alpha + self.trainer_config.lr_min * ( 1.0 - cooldown_alpha )
 
-        return min( warmup_lr, cooldown_lr )
+        return float( min( warmup_lr, cooldown_lr ) )
 
     def reset_metrics( self ) -> dict[str, float]:
         """ Resets all metrics in the state dict and returns their current values. """
@@ -402,6 +402,14 @@ class Trainer:
         self.dataset.cleanup_cache()
 
     def progress_bar( self, elapsed: float ) -> str:
+        r""" Returns a TQDM progress bar string with training stats.
+
+        Args:
+            elapsed (float): Time elapsed since epoch start.
+
+        Returns:
+            str: Formatted TQDM string. Should be prepended by `\r` when printing to clear the previous progress bar.
+        """
         return tqdm.tqdm.format_meter(
             n=( ( self.training_step - 1 ) % self.trainer_config.steps_per_epoch ) + 1,
             total=self.trainer_config.steps_per_epoch,
@@ -413,7 +421,7 @@ class Trainer:
             prefix=f'Step {self.training_step}'
         )
 
-    def lm_eval( self ):
+    def lm_eval( self ) -> dict[str, float]:
         self.model.eval()
 
         with suppress_stdout_stderr():
