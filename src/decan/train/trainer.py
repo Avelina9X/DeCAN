@@ -106,7 +106,7 @@ class Trainer:
 
         # Set initial training step and starting shard
         self.training_step = 0
-        self.starting_shard = 0
+        self.starting_shard = trainer_config.starting_shard
 
         # Create optimizer
         self.optimizer = self.create_optimizer()
@@ -296,7 +296,7 @@ class Trainer:
 
         # Load the state dict from disk and set optimizer state
         optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
-        state_dict = torch.load( optimizer_state_path )
+        state_dict = torch.load( optimizer_state_path, weights_only=True )
         self.optimizer.load_state_dict( state_dict )
 
     def save_optimizer_state( self ) -> None:
@@ -380,7 +380,7 @@ class Trainer:
         cooldown_alpha = np.cos( cooldown_ratio * np.pi ) * 0.5 + 0.5
         cooldown_lr = self.trainer_config.lr_max * cooldown_alpha + self.trainer_config.lr_min * ( 1.0 - cooldown_alpha )
 
-        return float( min( warmup_lr, cooldown_lr ) )
+        return min( warmup_lr, cooldown_lr )
 
     def reset_metrics( self ) -> dict[str, float]:
         """ Resets all metrics in the state dict and returns their current values. """

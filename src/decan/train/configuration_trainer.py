@@ -51,6 +51,7 @@ class TrainerConfig:
     perm_checkpoint_freq: int = field( default=64, metadata={ 'help': 'Number of `epochs` that must pass before saving a permanent checkpoint.' } )
 
     training_dataset: str = field( default='slim_pajama', metadata={ 'help': 'Training dataset to use.' } )
+    starting_shard: int = field( default=0, metadata={ 'help': 'Initial shard number to start with. Defaults to zero.' } )
 
     epochs_per_session: int = field( default=-1, metadata={
         'help': 'Number of `epochs` that must pass before we end the close the session. When set to -1 we end after `max_steps` have passed.',
