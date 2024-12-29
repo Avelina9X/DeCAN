@@ -5,7 +5,8 @@ import sys
 import pretrain
 
 if __name__ == '__main__':
-    # Check the first argument to delegate to the correct module
+    # Check the first argument to delegate to the correct module;
+    # remaining args will be parsed in the corresponding setup()
     match sys.argv[1]:
 
         # Pretain module for, well, pretraining!
