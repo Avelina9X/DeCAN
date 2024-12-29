@@ -1,34 +1,15 @@
 """ CLI module """
 
-from argparse import ArgumentParser
+import sys
 
-import torch.multiprocessing as mp
-
-from train import TrainerConfig, Trainer
-
-def run( rank, world_size, config: TrainerConfig ):
-    trainer = Trainer( config, world_size, rank )
-    try:
-        trainer.train()
-    except KeyboardInterrupt:
-        print( 'KeyboardInterrupt: aborting early!' )
-    trainer.cleanup()
-
-def setup():
-    parser = ArgumentParser()
-    init_mode, trainer_kwargs, model_kwargs = TrainerConfig.parse_arguments( parser )
-    config = Trainer.initialize( init_mode, trainer_kwargs, model_kwargs )
-
-    if config.use_ddp:
-        mp.set_start_method( 'spawn' )
-        mp.spawn( # type: ignore
-            fn=run,
-            args=( config.num_devices, config ),
-            nprocs=config.num_devices,
-            join=True,
-        )
-    else:
-        run( 0, 1, config )
+import pretrain
 
 if __name__ == '__main__':
-    setup()
+    # Check the first argument to delegate to the correct module
+    match sys.argv[1]:
+
+        # Pretain module for, well, pretraining!
+        case 'pretrain': pretrain.setup()
+
+        # Invalid choice!
+        case _: raise ValueError( f'Invalid first argument `{sys.argv[1]}`' )
