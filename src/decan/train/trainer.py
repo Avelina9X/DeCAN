@@ -110,7 +110,7 @@ class Trainer:
 
         # Create optimizer
         self.optimizer = self.create_optimizer()
-        self.optimizer_scaler = GradScaler()
+        self.optimizer_scaler = GradScaler( enabled=not self.model.config.use_bfloat16 )
 
         # Check if trainer and optimizer states exist
         trainer_state_exists = os.path.exists( os.path.join( trainer_config.curr_checkpoint_dir, 'trainer_state.pt' ) )
