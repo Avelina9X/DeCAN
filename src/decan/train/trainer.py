@@ -665,7 +665,8 @@ class Trainer:
                     raise ValueError( 'Got `do_init=False` when trying to start a new run!' )
 
                 # Load our modified tokenizer
-                tokenizer = load_tokenizer()
+                separate_bos_eos = model_config.bos_token_id != model_config.eos_token_id
+                tokenizer = load_tokenizer( separate_bos_eos=separate_bos_eos )
 
                 # Instantiate model and overwrite embeddings
                 model = DeCANForCausalLM( model_config )

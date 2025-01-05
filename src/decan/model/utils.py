@@ -6,11 +6,12 @@ from transformers import AutoTokenizer, AddedToken, PreTrainedTokenizerBase, Pre
 from transformers import AutoModelForCausalLM, PreTrainedModel
 from tokenizers.processors import TemplateProcessing
 
-def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
+def load_tokenizer( cache_dir: str | None = None, separate_bos_eos=False ) -> PreTrainedTokenizerBase:
     """ Loads the OPT tokenizer and modifies it for use with DeCAN
 
     Args:
         cache_dir (str, optional): Cache directory to store tokenizer. If `None` uses the `HF_CACHE_DIR` envar. Defaults to None.
+        separate_bos_eos (bool): Determines if BOS/EOS are shared (False) ore separate (True). Defaults to False.
 
     Returns:
         PreTrainedTokenizerBase: Modified GPT2TokenizerFast using OPT vocabulary, and with DeCAN's special tokens.
@@ -19,7 +20,7 @@ def load_tokenizer( cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
         'facebook/opt-125m',
         cache_dir=cache_dir or os.environ[ 'HF_CACHE_DIR' ],
         use_fast=True,
-        # bos_token='<s>',
+        bos_token='<s>' if separate_bos_eos else '</s>',
         # sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
         # cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
         # add_eos_token=True,
