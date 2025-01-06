@@ -72,6 +72,8 @@ class TrainerConfig:
     optimizer_kwargs: dict = field( default_factory=dict, metadata={ 'help': 'Optimizer arguments. Must NOT include learning rate or weight decay.' } )
     optimizer_zero: bool = field( default=False, metadata={ 'help': 'Enables the ZeRO optimizer if using DDP. Has no effect on single device training.' } )
 
+    cpu_offload_cache: bool = field( default=True, metadata={ 'help': 'Enables offloading the KV cache to system memory.' } )
+
     max_grad_norm: float = field( default=1.0, metadata={ 'help': 'Global gradient norm clipping value.' } )
 
     num_workers_per_device: int = field( default=1, metadata={

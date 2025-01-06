@@ -566,7 +566,7 @@ class Trainer:
             curr_cache.cache_to( device='cuda', non_blocking=True )
             loss, acc = self.train_micro_step( curr_tokens, curr_targets, curr_documents, curr_cache )
             curr_cache.pre_trim( self.trainer_config.sequence_length )
-            curr_cache.detach_cache_to( device='cpu', non_blocking=True )
+            curr_cache.detach_cache_to( device='cpu' if self.trainer_config.cpu_offload_cache else 'cuda', non_blocking=True )
 
             self.metrics[ 'loss' ].update( loss )
             self.metrics[ 'acc' ].update( acc )
