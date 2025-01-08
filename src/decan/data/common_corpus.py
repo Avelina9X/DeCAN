@@ -125,7 +125,11 @@ class CommonCorpusClientDataset( IterableDataset ):
                 data_files=url,
                 cache_dir=worker_cache_dir,
                 streaming=False,
-                download_config=DownloadConfig( max_retries=256 ),
+                download_config=DownloadConfig(
+                    max_retries=256,
+                    cache_dir=worker_cache_dir,
+                    disable_tqdm=True,
+                ),
                 split='train'
             )
 
