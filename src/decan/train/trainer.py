@@ -29,7 +29,7 @@ from lm_eval.evaluator import simple_evaluate
 from model import DeCANConfig, DeCANForCausalLM
 from model.utils import load_tokenizer, set_pretrained_embeddings
 from model.modeling_decan import DeCANTrainingCache
-from data import CommonCorpusDataset, SlimPajamaDataset, PileDataset
+from data import CommonCorpusDataset, SlimPajamaDataset, PileDataset, SmolLMCorpusDataset
 
 from .utils import DDPModelWrapper, MeanMetric
 from .configuration_trainer import TrainerConfig
@@ -252,6 +252,18 @@ class Trainer:
                 )
             case 'common_corpus':
                 return CommonCorpusDataset(
+                    tokenizer=self.tokenizer,
+                    seq_length=self.trainer_config.sequence_length,
+                    global_batch_size=self.trainer_config.global_batch_size,
+                    starting_shard=self.starting_shard,
+                    server_ip=DEFAULT_TCP_ADDR,
+                    server_port=DEFAULT_TCP_PORT,
+                    num_procs=self.trainer_config.num_workers_per_device,
+                    world_size=self.world_size,
+                    world_rank=self.world_rank,
+                )
+            case 'smollm_corpus':
+                return SmolLMCorpusDataset(
                     tokenizer=self.tokenizer,
                     seq_length=self.trainer_config.sequence_length,
                     global_batch_size=self.trainer_config.global_batch_size,
