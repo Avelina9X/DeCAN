@@ -573,10 +573,12 @@ class Trainer:
             curr_cache = cache_list[step]
 
             if self.trainer_config.use_ddp:
-                self.model.require_backward_grad_sync = step == ( self.trainer_config.gradient_accumulation_steps - 1 ) # type: ignore
+                grad_sync = step == ( self.trainer_config.gradient_accumulation_steps - 1 )
+            else:
+                grad_sync = None
 
             curr_cache.cache_to( device='cuda', non_blocking=True )
-            loss, acc = self.train_micro_step( curr_tokens, curr_targets, curr_documents, curr_cache )
+            loss, acc = self.train_micro_step( curr_tokens, curr_targets, curr_documents, curr_cache, grad_sync )
             curr_cache.pre_trim( self.trainer_config.sequence_length )
             curr_cache.detach_cache_to( device='cpu' if self.trainer_config.cpu_offload_cache else 'cuda', non_blocking=True )
 
@@ -605,7 +607,11 @@ class Trainer:
         curr_targets: torch.Tensor,
         curr_documents: torch.Tensor | None,
         curr_cache: DeCANTrainingCache,
+        grad_sync: bool | None
     ):
+        if grad_sync is not None:
+            self.model.require_backward_grad_sync = grad_sync # type: ignore
+        
         autocast_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
         with torch.autocast( device_type='cuda', dtype=autocast_dtype ):
             model_outputs: CausalLMOutputWithPast = self.model(
