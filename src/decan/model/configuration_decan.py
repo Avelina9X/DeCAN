@@ -20,6 +20,7 @@ class DeCANConfig( PretrainedConfig ):
         num_key_value_heads: int = 1,
         num_attention_heads: int = 12,
         head_dim: int = 64,
+        head_expansion: dict | None = None,
         max_position_embeddings: int = 4096,
         rope_theta: int = 500000,
         rope_scaling: dict | None = None,
@@ -45,6 +46,7 @@ class DeCANConfig( PretrainedConfig ):
         self.num_key_value_heads = num_key_value_heads
         self.num_attention_heads = num_attention_heads
         self.head_dim = head_dim
+        self.head_expansion = head_expansion
         self.max_position_embeddings = max_position_embeddings
         self.rope_theta = rope_theta
         self.rope_scaling = rope_scaling or {}
