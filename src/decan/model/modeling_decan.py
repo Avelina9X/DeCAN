@@ -325,6 +325,103 @@ def apply_rope( cos: torch.Tensor, sin: torch.Tensor, x: torch.Tensor ) -> torch
     return x * cos[ ..., -length :, : ] + rotate_half( x ) * sin[ ..., -length :, : ]
 
 
+class DeCANHeadExpansion( nn.Module ):
+    """ DeCAN Head Expansion module """
+    
+    def __init__(
+        self,
+        in_heads: int,
+        out_heads: int,
+        head_dim: int,
+        exp_type: str,
+        exp_init: str,
+        head_smoothing: float
+    ):
+        """ Instantiates a head expansion module.
+
+        Args:
+            in_heads (int): Number of retrieved heads to expand (num_k_heads).
+            out_heads (int): Number of expanded heads to return (num_q_heads).
+            head_dim (int): Head dimension.
+            exp_type (str): Head expansion type. Must be `scalar`, `vector` or `matrix`.
+            exp_init (str): Initialisation method. Must be `base`, `mqa` or `hybrid`.
+            head_smoothing (float): Head smoothing factor (lambda).
+        """
+        
+        super().__init__()
+
+        if in_heads > out_heads:
+            raise ValueError( 'Only supports in_heads <= out_heads right now!' )
+
+        self.in_heads = in_heads
+        self.out_heads = out_heads
+        self.head_dim = head_dim
+
+        if exp_type not in [ 'scalar', 'vector', 'matrix' ]:
+            raise ValueError( f'exp_type must be `scalar`, `vector` or `matrix` but got {exp_type}' )
+        self.exp_type = exp_type
+
+        if exp_init not in [ 'base', 'mqa', 'hybrid' ]:
+            raise ValueError( f'exp_init must be `base`, `mqa` or `hybrid` but got {exp_init}' )
+        self.exp_init = exp_init
+
+        if not( 0.0 <= head_smoothing <= 1.0 ):
+            raise ValueError( f'head_smoothing must be in range [0, 1] but got {head_smoothing}' )
+        self.head_smoothing = head_smoothing
+
+        # Create the gain matrix
+        match self.exp_init:
+            case 'base':
+                gain_matrix = torch.eye( self.out_heads )[ : self.in_heads ]
+
+            case 'mqa':
+                gain_matrix = torch.zeros( self.in_heads, self.out_heads )
+                gain_matrix[-1] = 1.0
+
+            case 'hybrid':
+                gain_matrix_id = torch.eye( self.out_heads )[ : self.in_heads ]
+
+                gain_matrix_mqa = torch.zeros( self.in_heads, self.out_heads )
+                gain_matrix_mqa[-1] = 1.0
+                gain_matrix_mqa = gain_matrix_mqa.triu( 1 )
+
+                gain_matrix = gain_matrix_id + gain_matrix_mqa
+
+            case _:
+                assert False, 'How?'
+
+        # Apply label smoothing
+        if self.head_smoothing > 0.0:
+            gain_matrix = gain_matrix * ( 1.0 - self.head_smoothing ) + self.head_smoothing
+            gain_matrix = F.normalize( gain_matrix, 2.0, 0 )
+
+        # Translate to weights
+        match self.exp_type:
+            case 'scalar': weight = gain_matrix
+            case 'vector': weight = gain_matrix[ ..., None ] * torch.ones( self.head_dim )
+            case 'matrix': weight = gain_matrix[ ..., None, None ] * torch.eye( self.head_dim )
+            case _: assert False, 'How?'
+
+        # Store as parameter
+        self.weight = nn.Parameter( weight, requires_grad=True )
+
+    def forward( self, heads: torch.Tensor ) -> torch.Tensor:
+        """ Head expansion forward pass.
+
+        Args:
+            heads (torch.Tensor): Key or Value heads of form [batch, num_k_heads, k_len, head_dim]
+
+        Returns:
+            torch.Tensor: Expanded Key or Value heads of form [batch, num_q_heads, k_len, head_dim]
+        """
+        
+        match self.exp_type:
+            case 'scalar': return torch.einsum( 'bnsd,nm->bmsd', heads, self.weight )
+            case 'vector': return torch.einsum( 'bnsd,nmd->bmsd', heads, self.weight )
+            case 'matrix': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight )
+            case _: assert False, 'How?'
+
+
 class DeCANAttention( nn.Module ):
     """
     Multi-headed attention with Densely Connected Attention Network head stacking.
@@ -354,6 +451,24 @@ class DeCANAttention( nn.Module ):
         self.k_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_k_heads, bias=self.attention_bias )
         self.v_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_k_heads, bias=self.attention_bias )
         self.o_proj = nn.Linear( self.head_dim * self.num_q_heads, self.hidden_size, bias=self.attention_bias )
+
+        self.k_exp = nn.Identity() if config.head_expansion is None else DeCANHeadExpansion(
+            in_heads=self.num_k_heads,
+            out_heads=self.num_q_heads,
+            head_dim=self.head_dim,
+            exp_type=config.head_expansion[ 'exp_type' ],
+            exp_init=config.head_expansion[ 'exp_init' ],
+            head_smoothing=config.head_expansion[ 'head_smoothing' ]
+        )
+
+        self.v_exp = nn.Identity() if config.head_expansion is None else DeCANHeadExpansion(
+            in_heads=self.num_k_heads,
+            out_heads=self.num_q_heads,
+            head_dim=self.head_dim,
+            exp_type=config.head_expansion[ 'exp_type' ],
+            exp_init=config.head_expansion[ 'exp_init' ],
+            head_smoothing=config.head_expansion[ 'head_smoothing' ]
+        )
 
     def forward(
         self,
@@ -395,6 +510,10 @@ class DeCANAttention( nn.Module ):
         # Apply rotary embeddings to queries and keys
         q_states = apply_rope( *position_embeddings, q_states )
         k_states = apply_rope( *position_embeddings, k_states )
+
+        # Apply head expansion (or identity)
+        k_states = self.k_exp( k_states )
+        v_states = self.v_exp( v_states )
 
         if output_attentions:
             attention_matrix = torch.einsum( 'bhqd,bhkd->bhqk', q_states, k_states  ) * self.head_dim ** -0.5 + attention_mask.to( q_states.dtype ).log()
