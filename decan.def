@@ -1,0 +1,27 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:24.05-py3
+
+%post
+	pip install --upgrade pip
+	pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+	pip install wcmatch
+	pip install wandb
+	pip install zstandard
+	pip install rich
+	pip install transformers
+	pip install sentence-transformers
+	pip install datasets
+	pip install diffusers
+	pip install evaluate
+	pip install torcheval
+	pip install einops
+	pip install spacy
+	pip install nltk
+	pip install rouge-score
+	python -m spacy download en_core_web_md
+	pip install shortuuid
+	pip install binpacking
+	pip uninstall -y flash-attn
+	MAX_JOBS=16 pip install --no-build-isolation flash-attn==v2.7.0.post2
+	pip install langdetect
+	pip install git+https://github.com/EleutherAI/lm-evaluation-harness.git#egg=lm-eval[math,ifeval,sentencepiece]

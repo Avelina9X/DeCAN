@@ -175,3 +175,9 @@ src/decan/scratch.py
 checkpoints/
 
 wandb/
+
+decan.sif
+
+app_build.sh
+app_run.sh
+.bash_history
