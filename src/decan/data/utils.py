@@ -1,4 +1,8 @@
 """ Utils module for data """
+import time
+import urllib
+import urllib.request
+from urllib.error import URLError, HTTPError, ContentTooShortError
 
 import torch
 from transformers import PreTrainedTokenizerBase
@@ -75,3 +79,21 @@ def base_batch_iterator(
             yield torch.LongTensor( output_x_container ), torch.LongTensor( output_y_container ), torch.LongTensor( output_d_container )
         except StopIteration:
             return
+
+
+def request_retry( url: str, file_path: str, max_retries: int = 30 ):
+    download_retries = 0
+    while True:
+        try:
+            urllib.request.urlretrieve( url, file_path )
+        except ( URLError, HTTPError, ContentTooShortError ) as err:
+            download_retries += 1
+
+            if download_retries > max_retries:
+                raise err
+            else:
+                print( f'Download error. Retrying in {download_retries * 10} seconds.' )
+                time.sleep( download_retries * 10 )
+                continue
+        else:
+            break
