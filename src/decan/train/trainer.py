@@ -63,7 +63,7 @@ class Trainer:
         torch._dynamo.config.cache_size_limit = 1024 * 1024 * 1024 # type: ignore # pylint: disable=W0212
         torch._dynamo.config.optimize_ddp = True # type: ignore # pylint: disable=W0212
         torch.backends.cuda.enable_cudnn_sdp( False ) # type: ignore # pylint: disable=W0212
-        torch._inductor.runtime.hints.TRITON_MAX_BLOCK[ 'X' ] = 4096 # type: ignore # pylint: disable=W0212
+        torch._inductor.runtime.hints.TRITON_MAX_BLOCK[ 'X' ] = 8192 # type: ignore # pylint: disable=W0212
         
         datasets.config.HF_DATASETS_TRUST_REMOTE_CODE = True # type: ignore
         datasets.disable_progress_bar()
