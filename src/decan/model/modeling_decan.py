@@ -112,6 +112,7 @@ class DeCANTrainingCache( Cache, DeCANCacheMixin ):
         num_hidden_layers: int,
         num_key_value_heads: int,
         head_dim: int,
+        dtype,
     ):
         """ Instatiates a dynamic training cache for DeCAN with a bounded maximum size.
 
@@ -125,8 +126,9 @@ class DeCANTrainingCache( Cache, DeCANCacheMixin ):
 
         trim_length = max_cache_length - sequence_length
 
-        self.key_cache: list[torch.Tensor] = [ -torch.ones( batch_size, num_key_value_heads, trim_length, head_dim, dtype=torch.long ) for _ in range( num_hidden_layers ) ]
-        self.value_cache: list[torch.Tensor] = [ -torch.ones( batch_size, num_key_value_heads, trim_length, head_dim, dtype=torch.long ) for _ in range( num_hidden_layers ) ]
+        self.key_cache: list[torch.Tensor] = [ torch.zeros( batch_size, num_key_value_heads, trim_length, head_dim, dtype=dtype ) for _ in range( num_hidden_layers ) ]
+        self.value_cache: list[torch.Tensor] = [ torch.zeros( batch_size, num_key_value_heads, trim_length, head_dim, dtype=dtype ) for _ in range( num_hidden_layers ) ]
+        self.document_ids = -torch.ones( batch_size, trim_length, dtype=torch.long )
 
     def update(
         self,

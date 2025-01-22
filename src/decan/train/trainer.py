@@ -495,6 +495,7 @@ class Trainer:
                 num_hidden_layers=self.model.config.num_hidden_layers,
                 num_key_value_heads=self.model.config.num_key_value_heads,
                 head_dim=self.model.config.head_dim,
+                dtype=torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
             )
             for _ in range( self.trainer_config.gradient_accumulation_steps )
         ]
