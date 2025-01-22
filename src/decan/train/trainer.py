@@ -488,7 +488,14 @@ class Trainer:
             )
 
         cache_list = [
-            DeCANTrainingCache( max_cache_length=self.trainer_config.cache_length )
+            DeCANTrainingCache(
+                max_cache_length=self.trainer_config.cache_length,
+                sequence_length=self.trainer_config.sequence_length,
+                batch_size=self.trainer_config.micro_batch_size,
+                num_hidden_layers=self.model.config.num_hidden_layers,
+                num_key_value_heads=self.model.config.num_key_value_heads,
+                head_dim=self.model.config.head_dim,
+            )
             for _ in range( self.trainer_config.gradient_accumulation_steps )
         ]
 
