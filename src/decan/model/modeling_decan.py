@@ -398,8 +398,8 @@ class DeCANHeadExpansion( nn.Module ):
         # Translate to weights
         match self.exp_type:
             case 'scalar': weight = gain_matrix
-            case 'vector': weight = gain_matrix[ ..., None ] * torch.ones( self.head_dim )
-            case 'matrix': weight = gain_matrix[ ..., None, None ] * torch.eye( self.head_dim )
+            case 'vector': weight = gain_matrix[ ..., None ] * torch.ones( self.head_dim )[ None, None, : ]
+            case 'matrix': weight = gain_matrix[ ..., None, None ] * torch.eye( self.head_dim )[ None, None, :, : ]
             case _: assert False, 'How?'
 
         # Store as parameter
