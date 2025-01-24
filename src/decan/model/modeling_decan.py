@@ -446,6 +446,11 @@ class DeCANAttention( nn.Module ):
 
         # Get layer connection list needed to match the query head count: [layer_idx - q // k, ..., layer_idx ]
         self.layer_select = list( range( self.layer_num - self.num_q_heads // self.num_k_heads, self.layer_num ) )
+        
+        # If we're doing head expansion, actually the number of q heads = num attention heads
+        # but we change this *after* we compute layer select to simplify the math
+        if config.head_expansion is not None:
+            self.num_q_heads = self.num_attention_heads
 
         self.q_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_q_heads, bias=self.attention_bias )
         self.k_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_k_heads, bias=self.attention_bias )
