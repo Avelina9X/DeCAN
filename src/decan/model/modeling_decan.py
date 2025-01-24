@@ -231,7 +231,7 @@ class DeCANRMSNorm(nn.Module):
         hidden_states = hidden_states.to( torch.float32 )
         variance = hidden_states.pow( 2 ).mean( -1, keepdim=True )
         hidden_states = hidden_states * torch.rsqrt( variance + self.rms_norm_eps )
-        return self.weight * hidden_states.to( input_dtype )
+        return ( self.weight * hidden_states ).to( input_dtype )
 
     def extra_repr(self):
         return f'{tuple(self.weight.shape)}, eps={self.rms_norm_eps}'
@@ -443,6 +443,7 @@ class DeCANAttention( nn.Module ):
 
         # Compute number of heads at current layer and clip by maximum number of attention heads
         self.num_q_heads = min( self.layer_num * self.num_k_heads, self.num_attention_heads )
+        true_kv_heads = self.num_q_heads
 
         # Get layer connection list needed to match the query head count: [layer_idx - q // k, ..., layer_idx ]
         self.layer_select = list( range( self.layer_num - self.num_q_heads // self.num_k_heads, self.layer_num ) )
@@ -458,7 +459,7 @@ class DeCANAttention( nn.Module ):
         self.o_proj = nn.Linear( self.head_dim * self.num_q_heads, self.hidden_size, bias=self.attention_bias )
 
         self.k_exp = nn.Identity() if config.head_expansion is None else DeCANHeadExpansion(
-            in_heads=self.num_k_heads,
+            in_heads=true_kv_heads,
             out_heads=self.num_q_heads,
             head_dim=self.head_dim,
             exp_type=config.head_expansion[ 'exp_type' ],
@@ -467,7 +468,7 @@ class DeCANAttention( nn.Module ):
         )
 
         self.v_exp = nn.Identity() if config.head_expansion is None else DeCANHeadExpansion(
-            in_heads=self.num_k_heads,
+            in_heads=true_kv_heads,
             out_heads=self.num_q_heads,
             head_dim=self.head_dim,
             exp_type=config.head_expansion[ 'exp_type' ],
@@ -500,9 +501,9 @@ class DeCANAttention( nn.Module ):
         B, L, _ = hidden_states.size() # pylint: disable=C0103
 
         # Project hidden states to qkv, reshape into heads, and swap the sequence and head dimensions
-        q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 )
-        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 )
-        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 )
+        q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
 
         # Update cache with new keys and values and return the stacked heads
         k_states, v_states = past_key_values.update(
@@ -537,7 +538,7 @@ class DeCANAttention( nn.Module ):
             attention_matrix = None
 
         # Transpose and combine heads
-        attn_output = attn_output.transpose( 1, 2 )
+        attn_output = attn_output.transpose( 1, 2 ).contiguous()
         attn_output = attn_output.view( B, L, self.head_dim * self.num_q_heads )
 
         # Project outputs for residual stream
