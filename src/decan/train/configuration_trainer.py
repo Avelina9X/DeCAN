@@ -67,6 +67,7 @@ class TrainerConfig:
     lr_min: float = field( default=1e-4, metadata={ 'help': 'Minimum learning rate at end of annealing.' } )
 
     weight_decay: float = field( default=0.1, metadata={ 'help': 'Weight decay to apply to all parameters but bias, embedding and normalization.' } )
+    weight_decay_exclude: list[str] = field( default_factory=list, metadata={ 'help': 'Partial string matches for weight names to exclude from weight decay.' } )
 
     optimizer: str = field( default='adamw', metadata={ 'help': 'The name of the optimizer to use. Currently supports `adamw` only.' } )
     optimizer_kwargs: dict = field( default_factory=dict, metadata={ 'help': 'Optimizer arguments. Must NOT include learning rate or weight decay.' } )

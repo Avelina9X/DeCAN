@@ -188,6 +188,8 @@ class Trainer:
         # Get the decay parameters from model
         decay_parameters = get_parameter_names( self.model, [ *ALL_LAYERNORM_LAYERS, torch.nn.Embedding ] )
         decay_parameters = [ name for name in decay_parameters if 'bias' not in name ]
+        for exclude in self.trainer_config.weight_decay_exclude:
+            decay_parameters = [ name for name in decay_parameters if exclude not in name ]
 
         # Create param groups for weight decay and non weight decay
         param_groups = [
