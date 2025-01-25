@@ -416,8 +416,8 @@ class DeCANHeadExpansion( nn.Module ):
         """
         
         match self.exp_type:
-            case 'scalar': return torch.einsum( 'bnsd,nm->bmsd', heads, self.weight )
-            case 'vector': return torch.einsum( 'bnsd,nmd->bmsd', heads, self.weight )
+            case 'scalar': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight[ ..., None, None ] * torch.eye( self.head_dim, dtype=self.weight.dtype, device=self.weight.device )[ None, None, :, : ] )
+            case 'vector': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight[ ..., None ] * torch.eye( self.head_dim, dtype=self.weight.dtype, device=self.weight.device )[ None, None, :, : ] )
             case 'matrix': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight )
             case _: assert False, 'How?'
 
