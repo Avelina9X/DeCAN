@@ -207,7 +207,7 @@ class DeCANDynamicCache( DynamicCache, DeCANCacheMixin ):
 
 
 class DeCANRMSNorm(nn.Module):
-    """ DeCANRMSNorm is equivalent to T5LayerNorm """
+    """ DeCANRMSNorm is NOT equivalent to T5's LayerNorm because that is BUGGED """
 
     def __init__( self, config: DeCANConfig ):
         super().__init__()
