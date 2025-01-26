@@ -461,6 +461,7 @@ class Trainer:
                 log_samples=False,
                 batch_size=self.trainer_config.eval_batch_size,
                 verbosity='ERROR',
+                cache_requests='LM_HARNESS_CACHE_PATH' in os.environ
             )[ 'results' ] # type: ignore
 
         if self.world_size > 1:
