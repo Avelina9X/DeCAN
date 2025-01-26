@@ -568,7 +568,7 @@ class Trainer:
                 self.save_final_checkpoint()
                 break
 
-            if do_log or do_eval or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
+            if do_eval or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 torch.cuda.empty_cache()
 
         if self.world_rank == 0:
