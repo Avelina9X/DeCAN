@@ -86,7 +86,7 @@ class Trainer:
             os.environ[ 'MASTER_PORT' ] = DEFAULT_DDP_PORT
 
             # Init process group
-            dist.init_process_group( rank=world_rank, world_size=world_size, timeout=timedelta( minutes=30 ) )
+            dist.init_process_group( 'nccl', rank=world_rank, world_size=world_size, timeout=timedelta( minutes=30 ) )
         
         # Load the model and tokenizer from disk
         self.model: DeCANForCausalLM = DeCANForCausalLM.from_pretrained( trainer_config.curr_checkpoint_dir ).cuda() # type: ignore
