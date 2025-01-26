@@ -99,6 +99,12 @@ class Trainer:
         # Load the model and tokenizer from disk
         self.model: DeCANForCausalLM = DeCANForCausalLM.from_pretrained( trainer_config.curr_checkpoint_dir ).cuda() # type: ignore
         self.tokenizer = AutoTokenizer.from_pretrained( trainer_config.curr_checkpoint_dir, use_fast=True )
+        
+        # Freeze frozen params
+        for n, p in self.model.named_parameters():
+            for exclude in self.trainer_config.frozen_params:
+                if exclude in n:
+                    p.requires_grad_( False )
 
         # Check model and tokenizer agree on special token IDs
         for id_name in [ 'bos', 'eos', 'pad', 'sep', 'cls' ]:

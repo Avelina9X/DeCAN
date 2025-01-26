@@ -72,6 +72,8 @@ class TrainerConfig:
     optimizer: str = field( default='adamw', metadata={ 'help': 'The name of the optimizer to use. Currently supports `adamw` only.' } )
     optimizer_kwargs: dict = field( default_factory=dict, metadata={ 'help': 'Optimizer arguments. Must NOT include learning rate or weight decay.' } )
     optimizer_zero: bool = field( default=False, metadata={ 'help': 'Enables the ZeRO optimizer if using DDP. Has no effect on single device training.' } )
+    
+    frozen_params: list[str] = field( default_factory=list, metadata={ 'help': 'Partial string matches for weight names to freeze.' } )
 
     cpu_offload_cache: bool = field( default=True, metadata={ 'help': 'Enables offloading the KV cache to system memory.' } )
 
