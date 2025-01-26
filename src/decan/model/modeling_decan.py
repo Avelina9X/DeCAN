@@ -421,6 +421,18 @@ class DeCANHeadExpansion( nn.Module ):
             case 'matrix': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight )
             case _: assert False, 'How?'
 
+    def get_gain_matrix( self ) -> torch.Tensor:
+        match self.exp_type:
+            case 'scalar':
+                return self.weight.abs()
+            case 'vector':
+                _, _, n = self.weight.shape
+                return self.weight.norm( 2.0, dim=-1 ) * n ** -0.5
+            case 'matrix':
+                _, _, n, _ = self.weight.shape
+                return self.weight.norm( 'fro', dim=[ -2, -1 ] ) * n ** -0.5
+            case _:
+                assert False, 'How?'
 
 class DeCANAttention( nn.Module ):
     """
