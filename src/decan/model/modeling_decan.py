@@ -830,6 +830,16 @@ class DeCANModel( DeCANPreTrainedModel ):
             hidden_states=all_hidden_states,
             attentions=all_attention_weights,
         )
+    
+    def regularization_loss( self, coef: float ):
+        if coef == 0 or self.conifg.head_expansion is None:
+            return 0.0
+        else:
+            accum = 0.0
+            for layer in self.layers:
+                accum = accum + ( 1.0 - layer.attention.k_exp.get_gain_matrix().norm( dim=0, p=2.0 ) ).square().sum()
+                accum = accum + ( 1.0 - layer.attention.v_exp.get_gain_matrix().norm( dim=0, p=2.0 ) ).square().sum()
+            return accum * coef
 
 class DeCANForCausalLM( DeCANPreTrainedModel, GenerationMixin ):
     _tied_weights_keys = [ 'lm_head.weight' ]
@@ -944,6 +954,9 @@ class DeCANForCausalLM( DeCANPreTrainedModel, GenerationMixin ):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+    
+    def regularization_loss( self, coef: float ):
+        return self.model.regularization_loss( coef )
 
     def prepare_inputs_for_generation(
         self,
