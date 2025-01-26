@@ -73,6 +73,13 @@ class Trainer:
         self.trainer_config = trainer_config
         self.world_size = world_size
         self.world_rank = world_rank
+                
+        # If wandb is disabled we're in debug mode, enable extra logging
+        if self.world_rank == 0 and self.trainer_config.wandb_mode == 'disabled':
+            torch._logging.set_logs(
+                graph_breaks=True,
+                recompiles=True,
+            )
 
         if trainer_config.num_devices != world_size:
             raise ValueError( '`trainer_config.num_devices` is not equal to `world_size`!' )
@@ -645,8 +652,9 @@ class Trainer:
             acc = ( logits.argmax( dim=-1 ) == curr_targets ) * valid_tokens
 
             loss = ( loss.sum( -1 ) / valid_length ).mean()
+            aux_loss = self.model.regularization_loss( self.trainer_config.head_expansion_l2 )
             acc = ( acc.float().sum( -1 ) / valid_length ).mean()
-        self.optimizer_scaler.scale( loss / self.trainer_config.gradient_accumulation_steps ).backward()
+        self.optimizer_scaler.scale( ( aux_loss + loss ) / self.trainer_config.gradient_accumulation_steps ).backward()
 
         return loss.detach(), acc.detach()
 
