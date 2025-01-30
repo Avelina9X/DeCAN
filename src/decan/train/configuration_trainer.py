@@ -269,6 +269,23 @@ class TrainerConfig:
         # All remaining arguments are trainer kwargs
         trainer_kwargs: dict[str, Any] = arguments
 
+        ###### if `resume` and `manifest_file`
+        # TODO: implement manifest_file system
+        # - check we have `manifist_file` in trainer_kwargs but NOT `run_name`
+        # - get all potential `run_name`s from manifest file
+        # - get first non-completed run
+        # - set `run_name` from manifest file
+        ######
+
+        ###### if `setup` or `new`
+        # TODO: implement manifest_file system
+        # - if `setup` we NEED a manifest file, otherwise if `new` and no file we skip
+        # - check if manifest file is on disk:
+        # -- if not on disk, create file, create runs list, add run to list
+        # -- if on disk, load file, add run to list
+        # - write back to manifest file
+        ######
+
         # Check that output dir and run name are specified when resuming
         if init_mode in [ 'resume' ]:
             if not 'output_dir' in trainer_kwargs:
