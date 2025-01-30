@@ -725,25 +725,6 @@ class Trainer:
 
                 return trainer_config
 
-            case 'start':
-                # Infer directory from trainer_kwargs
-                load_dir = os.path.join(
-                    os.path.expanduser( trainer_kwargs[ 'output_dir' ] ),
-                    trainer_kwargs[ 'run_name' ],
-                    'checkpoint_curr'
-                )
-                
-                # Load config and update
-                trainer_config = TrainerConfig.load_config( load_dir, trainer_kwargs )
-
-                if trainer_config.do_resume:
-                    raise ValueError( 'Got `do_resume=True` when trying to start a run!' )
-
-                if trainer_config.do_init:
-                    raise ValueError( 'Got `do_init=True` when trying to start a run!' )
-
-                return trainer_config
-
             case 'resume':
                 # Infer directory from trainer_kwargs
                 load_dir = os.path.join(
@@ -755,8 +736,8 @@ class Trainer:
                 # Load config and update
                 trainer_config = TrainerConfig.load_config( load_dir, trainer_kwargs )
 
-                if not trainer_config.do_resume:
-                    raise ValueError( 'Got `do_resume=False` when trying to resume a run!' )
+                if not trainer_config.is_complete:
+                    raise ValueError( 'Got `is_complete=True` when trying to resume a run!' )
 
                 return trainer_config
 
