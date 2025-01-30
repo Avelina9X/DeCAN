@@ -99,6 +99,11 @@ class TrainerConfig:
         'track': False,
     } )
 
+    is_complete: bool = field( default=False, metadata={
+        'help': 'When `True` this model has finished training.',
+        'track': False,
+    } )
+
     def __post_init__( self ):
         if self.do_init and self.do_resume:
             raise ValueError( 'Cannot set both `do_init` and `do_resume` to True' )

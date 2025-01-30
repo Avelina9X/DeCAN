@@ -529,6 +529,9 @@ class Trainer:
             do_final_checkpoint = self.training_step % self.trainer_config.max_steps == 0
             do_log = self.training_step % self.trainer_config.steps_per_epoch == 0
 
+            if do_final_checkpoint:
+                self.trainer_config.is_complete = True
+
             if do_eval:
                 eval_metrics = { f'validation/{k}': v for k, v in self.evaluator.eval().items() }
                 lm_eval_metrics = { f'validation/{k}': v for k, v in self.lm_eval().items() }
