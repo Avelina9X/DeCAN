@@ -220,12 +220,12 @@ class TrainerConfig:
         # Add argument for trainer type
         parser.add_argument(
             'init_mode',
-            choices=[ 'new', 'resume' ],
+            choices=[ 'new', 'setup', 'resume' ],
             help=(
                 'Launch mode for the trainer:'
                 ' `new` initialises a new checkpoint directory and saves the configs, and initialized model.'
-                ' `start` assumes only the initial checkpoint has been saved (use if a crash occurs before the first checkpoint.)'
-                ' `resume` continues training from the most recent checkpoint (use if a crash occurs after the first checkpoint or when training over multiple sessions.)'
+                ' `setup` like new, but will exit after creating the mode directory.'
+                ' `resume` continues training from the most recent checkpoint (use if a crash occurs, when training over multiple sessions, or after using `setup`.)'
             )
         )
 
@@ -259,7 +259,7 @@ class TrainerConfig:
 
         # Pop mode, model config and trainer config
         arguments.pop( 'mode' )
-        init_mode: Literal['new', 'resume'] = arguments.pop( 'init_mode' )
+        init_mode: Literal['new', 'setup', 'resume'] = arguments.pop( 'init_mode' )
         model_config_path: str | None = arguments.pop( 'model_config_path' )
         trainer_config_path: str | None = arguments.pop( 'trainer_config_path' )
 

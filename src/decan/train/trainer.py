@@ -677,7 +677,7 @@ class Trainer:
 
     @staticmethod
     def initialize(
-        init_mode: Literal['new', 'start', 'resume'],
+        init_mode: Literal['new', 'setup', 'resume'],
         trainer_kwargs: dict,
         model_kwargs: dict
     ) -> TrainerConfig:
@@ -686,7 +686,7 @@ class Trainer:
         Must be called BEFORE spawning new processes with torch.multiprocessing.spawn.
 
         Args:
-            init_mode (Literal['new', 'start', 'resume']): Run initialisation mode produced by `TrainerConfig.parse_arguments(...)`
+            init_mode (Literal['new', 'setup', 'resume']): Run initialisation mode produced by `TrainerConfig.parse_arguments(...)`
             trainer_kwargs (dict): Additional trainer arguments produced by `TrainerConfig.parse_arguments(...)`
             model_kwargs (dict): Additional model arguments produced by `TrainerConfig.parse_arguments(...)`
 
@@ -695,6 +695,36 @@ class Trainer:
         """
         
         match init_mode:
+            case 'setup':
+                # Initialize fresh configs
+                trainer_config = TrainerConfig( **trainer_kwargs )
+                model_config = DeCANConfig( **model_kwargs )
+
+                if not trainer_config.do_init:
+                    raise ValueError( 'Got `do_init=False` when trying to setup a new run!' )
+
+                # Load our modified tokenizer
+                separate_bos_eos = model_config.bos_token_id != model_config.eos_token_id
+                tokenizer = load_tokenizer( separate_bos_eos=separate_bos_eos )
+
+                # Instantiate model and overwrite embeddings
+                model = DeCANForCausalLM( model_config )
+                set_pretrained_embeddings( model )
+
+                # Now that everything is loaded, set do_init to False
+                trainer_config.do_init = False
+
+                # Get output save directory and create it
+                save_dir = trainer_config.curr_checkpoint_dir
+                os.makedirs( save_dir, exist_ok=False )
+
+                # Save all required files
+                model.save_pretrained( save_dir )
+                tokenizer.save_pretrained( save_dir )
+                trainer_config.save_config( save_dir )
+
+                exit() # TODO: handle this more gracefully, maybe add logging?
+                
             case 'new':
                 # Initialize fresh configs
                 trainer_config = TrainerConfig( **trainer_kwargs )
