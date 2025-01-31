@@ -276,6 +276,11 @@ class TrainerConfig:
         # Pop model kwargs
         model_kwargs: dict[str, Any] = arguments.pop( 'model_kwargs' ) or {}
 
+        # Maybe get head expansion kwargs and set
+        model_kwargs_hexp: dict[str, Any] | None = arguments.pop( 'model_kwargs_hexp', None )
+        if model_kwargs_hexp is not None:
+            model_kwargs[ 'head_expansion' ] = model_kwargs_hexp
+
         # All remaining arguments are trainer kwargs
         trainer_kwargs: dict[str, Any] = arguments
 

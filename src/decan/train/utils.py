@@ -101,6 +101,16 @@ def model_kwargs_parser( parser: ArgumentParser ):
         help='Additional `key=value` pairs to be passed to the model config loader.'
     )
 
+    parser.add_argument(
+        '--model_kwargs_hexp',
+        '--model-kwargs-hexp',
+        nargs='*',
+        default=SUPPRESS,
+        action=ParseKwargs,
+        dest='model_kwargs_hexp',
+        help='Additional `key=value` pairs to be passed to the model config loader.'
+    )
+
 def recursive_dict_update( base_dict: dict, new_dict: Mapping ) -> dict:
     for k, v in new_dict.items():
         if isinstance( v, Mapping ):
