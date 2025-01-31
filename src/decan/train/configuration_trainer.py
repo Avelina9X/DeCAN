@@ -3,6 +3,7 @@
 from argparse import ArgumentParser
 import os
 import json
+import yaml
 from dataclasses import dataclass, field, fields, Field
 from typing import Any, Literal
 from collections.abc import Sequence
@@ -247,6 +248,15 @@ class TrainerConfig:
             dest='trainer_config_path'
         )
 
+        # Add argument for specifying manifest_file_path
+        parser.add_argument(
+            '--manifest_file',
+            '--manifest-file',
+            nargs='?',
+            help='Name of manifest yaml file to create or load.',
+            dest='manifest_file_name'
+        )
+
         # Add arguments for all fields in the trainer
         for f in fields( cls ):
             field_parser( parser, f )
@@ -269,6 +279,10 @@ class TrainerConfig:
         # All remaining arguments are trainer kwargs
         trainer_kwargs: dict[str, Any] = arguments
 
+        # Handle manifest file
+        manifest_file_name: str | None = arguments.pop( 'manifest_file_name' )
+        
+
         ###### if `resume` and `manifest_file`
         # TODO: implement manifest_file system
         # - check we have `manifist_file` in trainer_kwargs but NOT `run_name`
@@ -290,12 +304,22 @@ class TrainerConfig:
         if init_mode in [ 'resume' ]:
             if not 'output_dir' in trainer_kwargs:
                 raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
+
+            # Maybe load run from manifest
+            if manifest_file_name:
+                cls.get_manifest_runs( manifest_file_name, trainer_kwargs )
+
+            # We need a run name to resume
             if not 'run_name' in trainer_kwargs:
                 raise ValueError( 'When resuming runs you MUST set `run_name` on the command line.' )
+
+            # Model cannot be modified from config or CLI
             if model_config_path or len( model_kwargs ) != 0:
                 raise ValueError(
                     'When resuming runs you CANNOT modify model params.'
                 )
+
+            # Trainer cannot be modified from config
             if trainer_config_path:
                 raise ValueError(
                     'When resuming runs you CANNOT set trainer parameters from a YAML config file. '
@@ -312,4 +336,57 @@ class TrainerConfig:
             config_kwargs = parse_yaml_file( trainer_config_path, 'trainer' )
             trainer_kwargs = recursive_dict_update( config_kwargs, trainer_kwargs )
         
-        return init_mode, trainer_kwargs, model_kwargs
+        return init_mode, trainer_kwargs, model_kwargs, manifest_file_name
+
+    @classmethod
+    def check_run_is_complete( cls, output_dir: str, run_name: str ) -> bool:
+        # Get load directory
+        load_dir = os.path.join(
+            os.path.expanduser( output_dir ),
+            run_name,
+            'checkpoint_curr'
+        )
+
+        # Load config and check is_complete field
+        return cls.load_config( load_dir, {} ).is_complete
+
+    @classmethod
+    def get_manifest_runs( cls, manifest_file_name: str, trainer_kwargs: dict ):
+        if not 'output_dir' in trainer_kwargs:
+            raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
+
+        output_dir = trainer_kwargs[ 'output_dir' ]
+        file_path = os.path.join( output_dir, manifest_file_name )
+
+        if 'run_name' in trainer_kwargs:
+            raise ValueError( 'When resuming runs from manifest you MUST NOT set `run_name` on the command line.' )
+
+        with open( file_path, 'r', encoding='utf-8' ) as f:
+            run_dict = yaml.load( f, yaml.FullLoader )
+        runs = run_dict[ 'runs' ]
+
+        for run_num in runs:
+            if not cls.check_run_is_complete( output_dir, run_num ):
+                trainer_kwargs[ 'run_name' ] = run_num
+                break
+
+    @classmethod
+    def add_manifest_run( cls, manifest_file_name: str, output_dir: str, run_name: str ):
+        # Create directory if it doesn't exist
+        os.makedirs( output_dir, exist_ok=True )
+
+        # Get file path
+        file_path = os.path.join( output_dir, manifest_file_name )
+
+        if os.path.exists( file_path ):
+            with open( file_path, 'r', encoding='utf-8' ) as f:
+                run_dict = yaml.load( f, yaml.FullLoader )
+            run_dict[ 'runs' ].append( run_name )
+        else:
+            run_dict = { 'runs': [ run_name ] }
+
+        with open( file_path, 'w', encoding='utf-8' ) as f:
+            yaml.dump( run_dict, f, default_flow_style=False, sort_keys=False )
+        
+        
+        

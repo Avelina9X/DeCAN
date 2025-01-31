@@ -31,10 +31,10 @@ def setup() -> None:
 
     # Parse command line arguments
     parser = ArgumentParser()
-    init_mode, trainer_kwargs, model_kwargs = TrainerConfig.parse_arguments( parser )
+    init_mode, trainer_kwargs, model_kwargs, manifest_file_name = TrainerConfig.parse_arguments( parser )
 
     # Perform initialisation and return the corresponding config
-    config = Trainer.initialize( init_mode, trainer_kwargs, model_kwargs )
+    config = Trainer.initialize( init_mode, trainer_kwargs, model_kwargs, manifest_file_name )
 
     # Check if multi-device
     if config.use_ddp:

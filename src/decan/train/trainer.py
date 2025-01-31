@@ -679,7 +679,8 @@ class Trainer:
     def initialize(
         init_mode: Literal['new', 'setup', 'resume'],
         trainer_kwargs: dict,
-        model_kwargs: dict
+        model_kwargs: dict,
+        manifest_file_name: str | None
     ) -> TrainerConfig:
         """ Initialization method to create or resume a training run.
 
@@ -689,6 +690,7 @@ class Trainer:
             init_mode (Literal['new', 'setup', 'resume']): Run initialisation mode produced by `TrainerConfig.parse_arguments(...)`
             trainer_kwargs (dict): Additional trainer arguments produced by `TrainerConfig.parse_arguments(...)`
             model_kwargs (dict): Additional model arguments produced by `TrainerConfig.parse_arguments(...)`
+            manifest_file_name (str | None): Name of the manifest file for run grouping
 
         Returns:
             TrainerConfig: The config object to be passed to Trainer.__init__() in spawned processes.
@@ -699,6 +701,9 @@ class Trainer:
                 # Initialize fresh configs
                 trainer_config = TrainerConfig( **trainer_kwargs )
                 model_config = DeCANConfig( **model_kwargs )
+
+                if manifest_file_name is None:
+                    raise ValueError( '`manifest_file` MUST be set when using setup!' )
 
                 if not trainer_config.do_init:
                     raise ValueError( 'Got `do_init=False` when trying to setup a new run!' )
@@ -722,6 +727,8 @@ class Trainer:
                 model.save_pretrained( save_dir )
                 tokenizer.save_pretrained( save_dir )
                 trainer_config.save_config( save_dir )
+                
+                TrainerConfig.add_manifest_run( manifest_file_name, trainer_config.output_dir, trainer_config.run_name )
 
                 exit() # TODO: handle this more gracefully, maybe add logging?
                 
@@ -752,6 +759,9 @@ class Trainer:
                 model.save_pretrained( save_dir )
                 tokenizer.save_pretrained( save_dir )
                 trainer_config.save_config( save_dir )
+
+                if manifest_file_name is not None:
+                    TrainerConfig.add_manifest_run( manifest_file_name, trainer_config.output_dir, trainer_config.run_name )
 
                 return trainer_config
 
