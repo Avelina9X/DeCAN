@@ -409,7 +409,7 @@ class Trainer:
         cooldown_alpha = np.cos( cooldown_ratio * np.pi ) * 0.5 + 0.5
         cooldown_lr = self.trainer_config.lr_max * cooldown_alpha + self.trainer_config.lr_min * ( 1.0 - cooldown_alpha )
 
-        return min( warmup_lr, cooldown_lr )
+        return float( min( warmup_lr, cooldown_lr ) )
 
     def reset_metrics( self ) -> dict[str, float]:
         """ Resets all metrics in the state dict and returns their current values. """
