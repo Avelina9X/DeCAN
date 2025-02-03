@@ -776,7 +776,7 @@ class Trainer:
                 # Load config and update
                 trainer_config = TrainerConfig.load_config( load_dir, trainer_kwargs )
 
-                if not trainer_config.is_complete:
+                if trainer_config.is_complete:
                     raise ValueError( 'Got `is_complete=True` when trying to resume a run!' )
 
                 return trainer_config
