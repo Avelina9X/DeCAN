@@ -6,8 +6,6 @@ import os
 import shutil
 import json
 from json import JSONDecodeError
-import urllib
-import urllib.request
 
 import zstandard
 
@@ -18,7 +16,7 @@ from torch.utils.data import IterableDataset, DataLoader
 from transformers import PreTrainedTokenizerBase
 from huggingface_hub import HfFileSystem
 
-from .utils import base_batch_iterator
+from .utils import base_batch_iterator, request_retry
 
 
 def read_lines_zst(file_name):
@@ -148,7 +146,7 @@ class SlimPajamaClientDataset( IterableDataset ):
             # Download the parquet shard to a worker-indexed temporary cache
             file_path = os.path.join( worker_cache_dir, f'shard_{current_shard}.jsonl.zst' )
             os.makedirs( worker_cache_dir, exist_ok=True )
-            urllib.request.urlretrieve( url, file_path )
+            request_retry( url, file_path )
 
             # Iterate over the entire parquet shard
             for i, line in enumerate( read_lines_zst( file_path ) ):
