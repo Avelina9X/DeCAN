@@ -449,29 +449,30 @@ class DeCANAttention( nn.Module ):
 
         self.hidden_size = config.hidden_size
         self.head_dim = config.head_dim
-        self.num_k_heads = config.num_key_value_heads
+        self.num_new_kv_heads = config.num_key_value_heads
         self.num_attention_heads = config.num_attention_heads
         self.attention_bias = config.attention_bias
 
         # Compute number of heads at current layer and clip by maximum number of attention heads
-        self.num_q_heads = min( self.layer_num * self.num_k_heads, self.num_attention_heads )
-        true_kv_heads = self.num_q_heads
+        self.num_all_kv_heads = min( self.layer_num * self.num_new_kv_heads, self.num_attention_heads )
 
         # Get layer connection list needed to match the query head count: [layer_idx - q // k, ..., layer_idx ]
-        self.layer_select = list( range( self.layer_num - self.num_q_heads // self.num_k_heads, self.layer_num ) )
+        self.layer_select = list( range( self.layer_num - self.num_all_kv_heads // self.num_new_kv_heads, self.layer_num ) )
         
-        # If we're doing head expansion, actually the number of q heads = num attention heads
-        # but we change this *after* we compute layer select to simplify the math
-        if config.head_expansion is not None:
+        if config.head_expansion is None:
+            # We're NOT doing head expansion, so q_heads = kv_heads
+            self.num_q_heads = self.num_all_kv_heads
+        else:
+            # We ARE doing head expansion, so q_heads = max_heads
             self.num_q_heads = self.num_attention_heads
 
         self.q_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_q_heads, bias=self.attention_bias )
-        self.k_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_k_heads, bias=self.attention_bias )
-        self.v_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_k_heads, bias=self.attention_bias )
+        self.k_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_new_kv_heads, bias=self.attention_bias )
+        self.v_proj = nn.Linear( self.hidden_size, self.head_dim * self.num_new_kv_heads, bias=self.attention_bias )
         self.o_proj = nn.Linear( self.head_dim * self.num_q_heads, self.hidden_size, bias=self.attention_bias )
 
         self.k_exp = nn.Identity() if config.head_expansion is None else DeCANHeadExpansion(
-            in_heads=true_kv_heads,
+            in_heads=self.num_all_kv_heads,
             out_heads=self.num_q_heads,
             head_dim=self.head_dim,
             exp_type=config.head_expansion[ 'exp_type' ],
@@ -480,7 +481,7 @@ class DeCANAttention( nn.Module ):
         )
 
         self.v_exp = nn.Identity() if config.head_expansion is None else DeCANHeadExpansion(
-            in_heads=true_kv_heads,
+            in_heads=self.num_all_kv_heads,
             out_heads=self.num_q_heads,
             head_dim=self.head_dim,
             exp_type=config.head_expansion[ 'exp_type' ],
@@ -514,8 +515,8 @@ class DeCANAttention( nn.Module ):
 
         # Project hidden states to qkv, reshape into heads, and swap the sequence and head dimensions
         q_states = self.q_proj( hidden_states ).view( B, L, self.num_q_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
-        k_states = self.k_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
-        v_states = self.v_proj( hidden_states ).view( B, L, self.num_k_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        k_states = self.k_proj( hidden_states ).view( B, L, self.num_new_kv_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
+        v_states = self.v_proj( hidden_states ).view( B, L, self.num_new_kv_heads, self.head_dim ).transpose( 1, 2 ).contiguous()
 
         # Update cache with new keys and values and return the stacked heads
         k_states, v_states = past_key_values.update(
