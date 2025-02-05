@@ -712,6 +712,10 @@ class Trainer:
                 separate_bos_eos = model_config.bos_token_id != model_config.eos_token_id
                 tokenizer = load_tokenizer( separate_bos_eos=separate_bos_eos )
 
+                # Set init seed if included in args
+                if trainer_config.set_init_seed is not None:
+                    torch.manual_seed( trainer_config.set_init_seed )
+
                 # Instantiate model and overwrite embeddings
                 model = DeCANForCausalLM( model_config )
                 set_pretrained_embeddings( model )
@@ -743,6 +747,10 @@ class Trainer:
                 # Load our modified tokenizer
                 separate_bos_eos = model_config.bos_token_id != model_config.eos_token_id
                 tokenizer = load_tokenizer( separate_bos_eos=separate_bos_eos )
+
+                # Set init seed if included in args
+                if trainer_config.set_init_seed is not None:
+                    torch.manual_seed( trainer_config.set_init_seed )
 
                 # Instantiate model and overwrite embeddings
                 model = DeCANForCausalLM( model_config )

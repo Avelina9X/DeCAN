@@ -5,7 +5,7 @@ import os
 import json
 import yaml
 from dataclasses import dataclass, field, fields, Field
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from collections.abc import Sequence
 
 import shortuuid
@@ -104,6 +104,8 @@ class TrainerConfig:
         'help': 'When `True` this model has finished training.',
         'track': False,
     } )
+    
+    set_init_seed: Optional[int] = field( default=None, metadata={ 'help': 'Sets the seed used for model initialisation when not `None`. This does *not* affect the seed used during training.' } )
 
     def __post_init__( self ):
         if self.do_init and self.do_resume:
