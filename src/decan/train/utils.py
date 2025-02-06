@@ -58,6 +58,7 @@ def field_parser( parser: ArgumentParser, f: Field ):
 
     is_list = isclass( origin_type ) and issubclass( origin_type, list )
     is_dict = isclass( origin_type ) and issubclass( origin_type, dict )
+    is_bool = f.type is bool
     true_type = f.type.__args__[0] if is_list else f.type
 
     if is_list:
@@ -78,6 +79,16 @@ def field_parser( parser: ArgumentParser, f: Field ):
             dest=f.name,
             default=SUPPRESS,
             action=ParseKwargs,
+            help=f.metadata[ 'help' ]
+        )
+    elif is_bool:
+        parser.add_argument(
+            f"--{f.name}",
+            f"--{f.name.replace( '_', '-' )}",
+            type=lambda x: str( x ).lower() in [ 'true', '1', 'yes' ],
+            nargs='?',
+            dest=f.name,
+            default=SUPPRESS,
             help=f.metadata[ 'help' ]
         )
     else:
