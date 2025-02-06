@@ -272,7 +272,7 @@ class TrainerConfig:
 
         # Pop mode, model config and trainer config
         arguments.pop( 'mode' )
-        init_mode: Literal['new', 'setup', 'resume'] = arguments.pop( 'init_mode' )
+        init_mode: Literal['new', 'setup', 'dummy', 'resume'] = arguments.pop( 'init_mode' )
         model_config_path: str | None = arguments.pop( 'model_config_path' )
         trainer_config_path: str | None = arguments.pop( 'trainer_config_path' )
 
