@@ -2,7 +2,7 @@
 
 import os
 import yaml
-from typing import Mapping
+from typing import Mapping, Union
 from inspect import isclass
 from dataclasses import Field
 from argparse import ArgumentParser, SUPPRESS, Action
@@ -58,8 +58,9 @@ def field_parser( parser: ArgumentParser, f: Field ):
 
     is_list = isclass( origin_type ) and issubclass( origin_type, list )
     is_dict = isclass( origin_type ) and issubclass( origin_type, dict )
+    is_optional = origin_type is Union and len( f.type.__args__ ) == 2
     is_bool = f.type is bool
-    true_type = f.type.__args__[0] if is_list else f.type
+    true_type = f.type.__args__[0] if is_list or is_optional else f.type
 
     if is_list:
         parser.add_argument(
