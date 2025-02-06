@@ -1,0 +1,80 @@
+model:
+  vocab_size: 50272
+  vocab_dim: 768
+  hidden_size: 768
+  intermediate_size: 2048
+  intermediate_act: silu
+  num_hidden_layers: 12
+  # num_key_value_heads: 1
+  num_attention_heads: 12
+  head_dim: 64
+  max_position_embeddings: 4096
+  rope_theta: 500000
+  rope_scaling: {}
+  tie_word_embeddings: True
+  attention_bias: False
+  mlp_bias: False
+  initializer_range: 0.02
+  rms_norm_eps: 1.0e-6
+  use_cache: True
+  bos_token_id: 2
+  eos_token_id: 2
+  pad_token_id: 1
+  sep_token_id: null
+  cls_token_id: null
+  # head_expansion:
+  #   exp_type: scalar
+  #   exp_init: hybrid
+  #   head_smoothing: 0.0
+
+trainer:
+  output_dir: '{CHECKPOINT_DIR}/pretrain/heads/'
+  # run_name: 'DeCANplusS-Small_{uuid}'
+
+  wandb_mode: online
+  wandb_project: '{WANDB_PROJECT_NAME}'
+  wandb_group: pretrain
+  wandb_tags:
+    - pretrain
+    - small
+    - hexp_ablations
+  
+  micro_batch_size: 24
+  eval_batch_size: 24
+  global_batch_size: 480
+
+  max_steps: 61440
+  warmup_steps: 2048
+
+  steps_per_epoch: 64
+  validation_freq: 8
+  temp_checkpoint_freq: 8
+  perm_checkpoint_freq: 320
+
+  # epochs_per_session
+
+  sequence_length: 2048
+  cache_length: 4096
+
+  lr_max: 1.0e-3
+  lr_min: 1.0e-4
+
+  weight_decay: 0.1
+
+  optimizer: adamw
+  optimizer_kwargs:
+    betas: [ 0.9, 0.95 ]
+    eps: 1.0e-8
+  optimizer_zero: True
+
+  cpu_offload_cache: False
+
+  max_grad_norm: 1.0
+
+  num_workers_per_device: 1
+
+  set_init_seed: 42
+
+  # num_devices
+  # do_init
+  # do_resume
