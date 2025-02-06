@@ -223,11 +223,12 @@ class TrainerConfig:
         # Add argument for trainer type
         parser.add_argument(
             'init_mode',
-            choices=[ 'new', 'setup', 'resume' ],
+            choices=[ 'new', 'setup', 'dummy', 'resume' ],
             help=(
                 'Launch mode for the trainer:'
                 ' `new` initialises a new checkpoint directory and saves the configs, and initialized model.'
                 ' `setup` like new, but will exit after creating the mode directory.'
+                ' `dummy` like setup, but will skip creating actual files and instead print configs to stdout. Use to test launch arguments.'
                 ' `resume` continues training from the most recent checkpoint (use if a crash occurs, when training over multiple sessions, or after using `setup`.)'
             )
         )

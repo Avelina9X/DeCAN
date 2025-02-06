@@ -11,6 +11,7 @@ import tqdm
 import wandb
 import binpacking
 import numpy as np
+import rich
 
 import torch
 import torch.distributed as dist
@@ -677,7 +678,7 @@ class Trainer:
 
     @staticmethod
     def initialize(
-        init_mode: Literal['new', 'setup', 'resume'],
+        init_mode: Literal['new', 'setup', 'dummy', 'resume'],
         trainer_kwargs: dict,
         model_kwargs: dict,
         manifest_file_name: str | None
@@ -735,6 +736,28 @@ class Trainer:
                 TrainerConfig.add_manifest_run( manifest_file_name, trainer_config.output_dir, trainer_config.run_name )
 
                 exit() # TODO: handle this more gracefully, maybe add logging?
+            
+            case 'dummy':
+                # Initialize fresh configs
+                trainer_config = TrainerConfig( **trainer_kwargs )
+                model_config = DeCANConfig( **model_kwargs )
+                
+                # Load our modified tokenizer
+                separate_bos_eos = model_config.bos_token_id != model_config.eos_token_id
+                tokenizer = load_tokenizer( separate_bos_eos=separate_bos_eos )
+
+                # Set init seed if included in args
+                if trainer_config.set_init_seed is not None:
+                    torch.manual_seed( trainer_config.set_init_seed )
+
+                # Instantiate model and overwrite embeddings
+                model = DeCANForCausalLM( model_config )
+                set_pretrained_embeddings( model )
+                
+                rich.print( trainer_config )
+                rich.print( model_config )
+                
+                exit()
                 
             case 'new':
                 # Initialize fresh configs
