@@ -51,7 +51,7 @@ class TrainerConfig:
     temp_checkpoint_freq: int = field( default=4, metadata={ 'help': 'Number of `epochs` that must pass before saving a temporary checkpoint.' } )
     perm_checkpoint_freq: int = field( default=64, metadata={ 'help': 'Number of `epochs` that must pass before saving a permanent checkpoint.' } )
 
-    training_dataset: str = field( default='slim_pajama', metadata={ 'help': 'Training dataset to use.' } )
+    training_dataset: str = field( default='smollm_corpus', metadata={ 'help': 'Training dataset to use.' } )
     starting_shard: int = field( default=0, metadata={ 'help': 'Initial shard number to start with. Defaults to zero.' } )
 
     epochs_per_session: int = field( default=-1, metadata={
