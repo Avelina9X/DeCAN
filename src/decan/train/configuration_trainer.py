@@ -24,6 +24,9 @@ logger = logging.get_logger( __name__ )
 
 @dataclass
 class TrainerConfig:
+    """ TrainerConfig dataclass for managing all training hyperparameters for pretraining.
+    Implements helper functions and properties for run management and handles arg parsing.
+    """
     output_dir: str = field( metadata={
         'help': 'The output directory to store the run folder. May be a formatted string to use envars.',
         'track': False
@@ -141,39 +144,56 @@ class TrainerConfig:
 
     @property
     def run_dir( self ) -> str:
+        """ Returns the run directory by joining `output_dir` and `run_name` """
         return os.path.join( self.output_dir, self.run_name )
 
     @property
     def curr_checkpoint_dir( self ) -> str:
+        """ Returns the current checkpoint directory by joining `run_dir` and `'checkpoint_curr'` """
         return os.path.join( self.run_dir, 'checkpoint_curr' )
 
     @property
     def final_checkpoint_dir( self ) -> str:
+        """ Returns the final checkpoint directory by joining `run_dir` and `'checkpoint_final'` """
         return os.path.join( self.run_dir, 'checkpoint_final' )
 
     def perm_checkpoint_dir( self, step: int ):
+        """ Returns the permeanent checkpoint directory by joining `run_dir` and `'checkpoint_step_{step}'` for the current optimizer step """
         return os.path.join( self.run_dir, f'checkpoint_step_{step}' )
 
 
     @property
     def use_ddp( self ) -> bool:
+        """ Returns True if DDP is enabled (i.e `num_devices >1`) """
         return self.num_devices > 1
 
     @property
     def use_zero_optimizer( self ) -> bool:
+        """ Returns True when using the ZeRO Redency Optimizer and DDP is also enabled """
         return self.use_ddp and self.optimizer_zero
 
 
     @property
     def local_batch_size( self ) -> int:
+        """ Returns the local batch size (i.e. `global_batch_size // num_devices`) """
         return self.global_batch_size // self.num_devices
 
     @property
     def gradient_accumulation_steps( self ) -> int:
+        """ Returns the number of steps for gradient accumulation on this device (i.e. `local_batch_size // micro_batch_size`) """
         return self.local_batch_size // self.micro_batch_size
 
 
     def to_dict( self, tracked_only=False ) -> dict:
+        """ Returns a dict that represents this dataclass, optionally hidding fields with `track=False` metadata.
+
+        Args:
+            tracked_only (bool, optional): When True hides fields with `track=False` metadata.
+                Useful for hiding redundent or irrelevant data from WandB. Defaults to False.
+
+        Returns:
+            dict: Dict mapping field name to field value for all (or only tracked) dataclass fields.
+        """
         def cond( f: Field ):
             return ( f.metadata.get( 'track', f.init ) if tracked_only else f.init )
 
@@ -181,12 +201,31 @@ class TrainerConfig:
         return d
 
     def to_json_string( self, tracked_only=False ) -> str:
+        """ Returns a JSON string that represents this dataclass, optionally hidding fields with `track=False` metadata.
+
+        Args:
+            tracked_only (bool, optional): When True hides fields with `track=False` metadata.
+                Useful for hiding redundent or irrelevant data from WandB. Defaults to False.
+
+        Returns:
+            str: JSON string mapping field name to field value for all (or only tracked) dataclass fields.
+        """
         return json.dumps( self.to_dict( tracked_only ), indent=2 )
 
     def to_wandb_dict( self ) -> dict:
+        """ Returns a WandB ready dict that represents this dataclass, hidding fields with `track=False` metadata.
+
+        Returns:
+            dict: Dict mapping field name to field value for only tracked dataclass fields.
+        """
         return self.to_dict( tracked_only=True )
 
     def save_config( self, save_directory: str ):
+        """ Saves the trainer config to a directory as a JSON file.
+
+        Args:
+            save_directory (str): Directory where `'trainer.json'` should be saved.
+        """
         os.makedirs( save_directory, exist_ok=True )
         json_file_path = os.path.join( save_directory, 'trainer.json' )
         with open( json_file_path, 'w', encoding='utf-8' ) as writer:
@@ -194,6 +233,15 @@ class TrainerConfig:
 
     @classmethod
     def load_config( cls, save_directory: str, trainer_kwargs: dict | None = None ):
+        """ Loads a trainer config from a directory, with optional kwargs to overwrite the config.
+
+        Args:
+            save_directory (str): Directory where `'trainer.json'` should be loaded from.
+            trainer_kwargs (dict | None, optional): Optional key-value pairs of config fields to overwite. Defaults to None.
+
+        Returns:
+            TrainerConfig: Instantiated config.
+        """
         json_file_path = os.path.join( save_directory, 'trainer.json' )
         with open( json_file_path, 'r', encoding='utf-8' ) as reader:
             obj = json.load( reader )
@@ -212,6 +260,21 @@ class TrainerConfig:
 
     @classmethod
     def parse_arguments( cls, parser: ArgumentParser, args: Sequence[str] | None = None ):
+        """ Parses arguments from the commandline or the `args` parameter and returns a config object.
+
+        Args:
+            parser (ArgumentParser): ArgumentParser object to use for parsing. If in doubt, pass an unmodified `ArgumentParser()` instance.
+            args (Sequence[str] | None, optional): Optional List of arguments to use instead of retrieving from the command line. Defaults to None.
+
+        Raises:
+            ValueError: _description_
+            ValueError: _description_
+            ValueError: _description_
+            ValueError: _description_
+
+        Returns:
+            TrainerConfig: Instantiated config.
+        """
 
         # Add mode argument
         parser.add_argument(
@@ -289,24 +352,6 @@ class TrainerConfig:
 
         # Handle manifest file
         manifest_file_name: str | None = arguments.pop( 'manifest_file_name' )
-        
-
-        ###### if `resume` and `manifest_file`
-        # TODO: implement manifest_file system
-        # - check we have `manifist_file` in trainer_kwargs but NOT `run_name`
-        # - get all potential `run_name`s from manifest file
-        # - get first non-completed run
-        # - set `run_name` from manifest file
-        ######
-
-        ###### if `setup` or `new`
-        # TODO: implement manifest_file system
-        # - if `setup` we NEED a manifest file, otherwise if `new` and no file we skip
-        # - check if manifest file is on disk:
-        # -- if not on disk, create file, create runs list, add run to list
-        # -- if on disk, load file, add run to list
-        # - write back to manifest file
-        ######
 
         # Check that output dir and run name are specified when resuming
         if init_mode in [ 'resume' ]:
@@ -333,7 +378,7 @@ class TrainerConfig:
                     'When resuming runs you CANNOT set trainer parameters from a YAML config file. '
                     'If you would like to change parameters use the appropriate command line args.'
                 )
-            
+
         # If model config is specified, load and update the model kwargs
         if model_config_path:
             config_kwargs = parse_yaml_file( model_config_path, 'model' )
@@ -343,11 +388,22 @@ class TrainerConfig:
         if trainer_config_path:
             config_kwargs = parse_yaml_file( trainer_config_path, 'trainer' )
             trainer_kwargs = recursive_dict_update( config_kwargs, trainer_kwargs )
-        
+
         return init_mode, trainer_kwargs, model_kwargs, manifest_file_name
 
     @classmethod
     def check_run_is_complete( cls, output_dir: str, run_name: str ) -> bool:
+        """ Checks if a run is complete by checking the `is_complete` property of the run's config.
+        
+        The config file is loaded from `{output_dir}/{run_name}/checkpoint_curr/trainer.json`.
+
+        Args:
+            output_dir (str): Parent directory where the run is stored, should match the `output_dir` config field.
+            run_name (str): Name of the run which determines which subdir to load the config from.
+
+        Returns:
+            bool: True when the run has completed training.
+        """
         # Get load directory
         load_dir = os.path.join(
             os.path.expanduser( output_dir ),
@@ -360,6 +416,18 @@ class TrainerConfig:
 
     @classmethod
     def get_manifest_runs( cls, manifest_file_name: str, trainer_kwargs: dict ):
+        """ This method loads the manifest YAML file and finds the first run that is not yet completed.
+        The manifest file must be in the same `'output_dir'` specified in the `trainer_kwargs` argument.
+        Once a run has been found the `'run_name'` field of `trainer_kwargs` will be modified in place.
+
+        Args:
+            manifest_file_name (str): Name and extension of the manifest YAML file.
+            trainer_kwargs (dict): Full set of kwargs to instantiate the trainer config with.
+
+        Raises:
+            ValueError: Raised if `'output_dir'` is NOT in `trainer_kwargs` - we need this to locate runs and the manifest.
+            ValueError: Raised if `'run_name'` IS in `trainer_kwargs` - specifying both run_name and manifest_file may be user error!
+        """
         if not 'output_dir' in trainer_kwargs:
             raise ValueError( 'When resuming runs you MUST set `output_dir` on the command line.' )
 
@@ -381,6 +449,13 @@ class TrainerConfig:
 
     @classmethod
     def add_manifest_run( cls, manifest_file_name: str, output_dir: str, run_name: str ):
+        """ Adds run name to an existing manifest file, or creates a new one.
+
+        Args:
+            manifest_file_name (str): File name of the manifest file.
+            output_dir (str): Output directory where manifest file and runs are stored.
+            run_name (str): Name of the run to add to the manifest file.
+        """
         # Create directory if it doesn't exist
         os.makedirs( output_dir, exist_ok=True )
 
@@ -397,6 +472,3 @@ class TrainerConfig:
 
         with open( file_path, 'w', encoding='utf-8' ) as f:
             yaml.dump( run_dict, f, default_flow_style=False, sort_keys=False )
-        
-        
-        
