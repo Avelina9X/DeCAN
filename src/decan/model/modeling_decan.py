@@ -370,7 +370,7 @@ class DeCANHeadExpansion( nn.Module ):
         self.head_smoothing = head_smoothing
 
         # Create the gain matrix
-        match self.exp_init:
+        match self.exp_init: # type: ignore
             case 'base':
                 gain_matrix = torch.eye( self.out_heads )[ : self.in_heads ]
 
@@ -396,7 +396,7 @@ class DeCANHeadExpansion( nn.Module ):
             gain_matrix = F.normalize( gain_matrix, 2.0, 0 )
 
         # Translate to weights
-        match self.exp_type:
+        match self.exp_type: # type: ignore
             case 'scalar': weight = gain_matrix
             case 'vector': weight = gain_matrix[ ..., None ] * torch.ones( self.head_dim )[ None, None, : ]
             case 'matrix': weight = gain_matrix[ ..., None, None ] * torch.eye( self.head_dim )[ None, None, :, : ]
@@ -415,14 +415,14 @@ class DeCANHeadExpansion( nn.Module ):
             torch.Tensor: Expanded Key or Value heads of form [batch, num_q_heads, k_len, head_dim]
         """
         
-        match self.exp_type:
+        match self.exp_type: # type: ignore
             case 'scalar': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight[ ..., None, None ] * torch.eye( self.head_dim, dtype=self.weight.dtype, device=self.weight.device )[ None, None, :, : ] )
             case 'vector': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight[ ..., None ] * torch.eye( self.head_dim, dtype=self.weight.dtype, device=self.weight.device )[ None, None, :, : ] )
             case 'matrix': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight )
             case _: assert False, 'How?'
 
     def get_gain_matrix( self ) -> torch.Tensor:
-        match self.exp_type:
+        match self.exp_type: # type: ignore
             case 'scalar':
                 return self.weight.abs()
             case 'vector':

@@ -243,7 +243,7 @@ class Trainer:
     def create_dataset( self ):
         """ Returns the dataset specified by the trainer config """
         
-        match self.trainer_config.training_dataset:
+        match self.trainer_config.training_dataset: # type: ignore
             case 'pile':
                 return PileDataset(
                     tokenizer=self.tokenizer,
@@ -697,7 +697,7 @@ class Trainer:
             TrainerConfig: The config object to be passed to Trainer.__init__() in spawned processes.
         """
         
-        match init_mode:
+        match init_mode: # type: ignore
             case 'setup':
                 # Initialize fresh configs
                 trainer_config = TrainerConfig( **trainer_kwargs )
