@@ -57,7 +57,7 @@ logger = logging.get_logger( __name__ )
 
 class Trainer:
     """ DeCAN trainer class """
-    
+
     def __init__( self, trainer_config: TrainerConfig, world_size: int, world_rank: int ):
         # Set some performance flags
         torch.backends.cuda.matmul.allow_tf32 = True # type: ignore # pylint: disable=W0212
@@ -66,15 +66,15 @@ class Trainer:
         torch._dynamo.config.optimize_ddp = True # type: ignore # pylint: disable=W0212
         torch.backends.cuda.enable_cudnn_sdp( False ) # type: ignore # pylint: disable=W0212
         torch.backends.cuda.enable_math_sdp( False )
-        
+
         datasets.config.HF_DATASETS_TRUST_REMOTE_CODE = True # type: ignore
         datasets.disable_progress_bar()
         eval_logger.setLevel( 'ERROR' )
-    
+
         self.trainer_config = trainer_config
         self.world_size = world_size
         self.world_rank = world_rank
-                
+
         # If wandb is disabled we're in debug mode, enable extra logging
         if self.world_rank == 0 and self.trainer_config.wandb_mode == 'disabled':
             torch._logging.set_logs(
@@ -96,11 +96,11 @@ class Trainer:
 
             # Init process group
             dist.init_process_group( 'nccl', rank=world_rank, world_size=world_size, timeout=timedelta( minutes=30 ) )
-        
+
         # Load the model and tokenizer from disk
         self.model: DeCANForCausalLM = DeCANForCausalLM.from_pretrained( trainer_config.curr_checkpoint_dir ).cuda() # type: ignore
         self.tokenizer = AutoTokenizer.from_pretrained( trainer_config.curr_checkpoint_dir, use_fast=True )
-        
+
         # Freeze frozen params
         for n, p in self.model.named_parameters():
             for exclude in self.trainer_config.frozen_params:
@@ -143,7 +143,7 @@ class Trainer:
                 raise ValueError( 'Trying to start from an initial checkpoint but `scaler_state.pt` already exists!' )
 
             self.trainer_config.do_resume = True
-        
+
         # If we ARE resuming we DO want trainer and optimizer states to exist so we can load them
         else:
             if not trainer_state_exists:
@@ -199,7 +199,7 @@ class Trainer:
 
     def create_optimizer( self ) -> Optimizer:
         """ Returns the optimizer specified by the trainer config """
-        
+
         # Get the decay parameters from model
         decay_parameters = get_parameter_names( self.model, [ *ALL_LAYERNORM_LAYERS, torch.nn.Embedding ] )
         decay_parameters = [ name for name in decay_parameters if 'bias' not in name ]
@@ -232,7 +232,7 @@ class Trainer:
                 lr=0,
                 **self.trainer_config.optimizer_kwargs,
             )
-        
+
         # Return base optimizer
         return optimizer_cls(
             param_groups,
@@ -242,7 +242,7 @@ class Trainer:
 
     def create_dataset( self ):
         """ Returns the dataset specified by the trainer config """
-        
+
         match self.trainer_config.training_dataset: # type: ignore
             case 'pile':
                 return PileDataset(
@@ -297,7 +297,7 @@ class Trainer:
 
     def load_trainer_state( self ) -> None:
         """ Loads the strainer state from trainer_state.pt"""
-        
+
         # Load state dict
         trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
         trainer_state = torch.load( trainer_state_path, weights_only=True )
@@ -368,11 +368,11 @@ class Trainer:
         - tokenizer files and config
         - model weights (FP32) and config
         """
-        
+
         self.save_trainer_state()
         self.save_optimizer_state()
         self.save_scaler_state()
-        
+
         save_dir = self.trainer_config.curr_checkpoint_dir
         self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
         self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
@@ -383,7 +383,7 @@ class Trainer:
         - tokenizer files and config
         - model weights (FP32) and config
         """
-        
+
         save_dir = self.trainer_config.perm_checkpoint_dir( self.training_step )
         self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
         self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
@@ -394,7 +394,7 @@ class Trainer:
         - tokenizer files and config
         - model weights (BF16/FP16) and config
         """
-        
+
         save_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
         save_dir = self.trainer_config.final_checkpoint_dir
         self.model.to( dtype=save_dtype ).save_pretrained( save_dir, is_main_process=self.world_rank==0 ) # type: ignore
@@ -402,10 +402,10 @@ class Trainer:
 
     def get_learning_rate( self ) -> float:
         """ Computes the learning rate at the current step and returns it as a float"""
-        
+
         warmup_ratio = min( self.training_step / self.trainer_config.warmup_steps, 1.0 )
         warmup_lr = warmup_ratio * self.trainer_config.lr_max
-        
+
         cooldown_ratio = min( max( self.training_step - self.trainer_config.warmup_steps, 0.0 ) / ( self.trainer_config.max_steps - self.trainer_config.warmup_steps ), 1.0 )
         cooldown_alpha = np.cos( cooldown_ratio * np.pi ) * 0.5 + 0.5
         cooldown_lr = self.trainer_config.lr_max * cooldown_alpha + self.trainer_config.lr_min * ( 1.0 - cooldown_alpha )
@@ -414,7 +414,7 @@ class Trainer:
 
     def reset_metrics( self ) -> dict[str, float]:
         """ Resets all metrics in the state dict and returns their current values. """
-        
+
         stats = {}
         for name, metric in self.metrics.items():
             stats[name] = float( metric.compute() )
@@ -423,7 +423,7 @@ class Trainer:
 
     def cleanup( self ) -> None:
         """ Runs cleanup at the end of training. """
-        
+
         # Cleanup DDP processes if we're using DDP
         if self.trainer_config.use_ddp:
             dist.destroy_process_group()
@@ -452,6 +452,13 @@ class Trainer:
         )
 
     def lm_eval( self ) -> dict[str, float]:
+        """ Runs evaluations using the LM Eval Harness on 1 or more GPU and gathers task metrics back to rank 0.
+        Note that tasks themselves are distributed across GPUs, but not samples from each task. This may result
+        in some GPUs waiting for others to finish eval, but gaurantees identical behaviour for all world sizes.
+
+        Returns:
+            dict[str, float]: Dict mapping metric name to metric value. Note stderr values are not tracked.
+        """
         self.model.eval()
 
         with suppress_stdout_stderr():
@@ -473,7 +480,7 @@ class Trainer:
                     rcv_list = [ {} ]
                     dist.recv_object_list( rcv_list, rank )
                     eval_results.update( rcv_list[0] )
-        
+
         flat_metrics = {}
 
         for task, metrics in eval_results.items():
@@ -484,6 +491,18 @@ class Trainer:
         return flat_metrics
 
     def train( self ):
+        """ Main training loop that runs until completion, specified max steps per session, or until a crash!
+        
+        Handles:
+        - setting up WandB
+        - setting up DeCAN augmented TransformerXL cache for training
+        - logs metrics and other stats to WandB at the end of every epoch
+        - performs document and task validation, with WandB metric logging
+        - periodically saves a rolling checkpoints
+        - periodically saves permeanent checkpoints
+        - saves the final quantized checkpoint at the end of training
+        - finalizes WandB 
+        """
         # Create dataloader
         dataloader = self.dataset.as_data_loader()
         iterator = iter( dataloader )
@@ -549,7 +568,7 @@ class Trainer:
                         'stats/num_tokens': self.training_step * self.trainer_config.global_batch_size * self.trainer_config.sequence_length,
                         'stats/learning_rate': self.get_learning_rate(),
                     } )
-                    
+
                     wandb.log( metrics )
                     print()
 
@@ -578,9 +597,15 @@ class Trainer:
         if self.world_rank == 0:
             wandb.finish()
 
-    def train_step( self, batch, cache_list: list[DeCANTrainingCache] ):
+    def train_step( self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], cache_list: list[DeCANTrainingCache] ):
+        """ Performs a single training step, handling gradient accumulation, metric tracking, and the optimizer step.
+
+        Args:
+            batch (tuple[torch.Tensor, torch.Tensor, torch.Tensor]): Tuple of input, target and document id tensors.
+            cache_list (list[DeCANTrainingCache]): List of DeCAN caches, each element corresponding to a micro-batch.
+        """
         self.model.train()
-        
+
         # Unpack batch
         tokens, targets, documents = batch
 
@@ -610,6 +635,11 @@ class Trainer:
         self.optimizer_step()
 
     def optimizer_step( self ):
+        """ Performs an optimizer step.
+        
+        Automatically incrememnts the training step,
+        performs grad unscaling and clipping,
+        and updates the learning rate. """
         self.training_step += 1
 
         for p_group in self.optimizer.param_groups:
@@ -630,10 +660,22 @@ class Trainer:
         curr_documents: torch.Tensor | None,
         curr_cache: DeCANTrainingCache,
         grad_sync: bool | None
-    ):
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """ Performs a single forward-backward pass for a micro-batch.
+
+        Args:
+            curr_tokens (torch.Tensor): Input IDs for the current micro-batch.
+            curr_targets (torch.Tensor): Target IDs for the current micro-batch.
+            curr_documents (torch.Tensor | None): Document IDs for the current micro-batch or None when document masking is disabled.
+            curr_cache (DeCANTrainingCache): DeCAN cache for the current micro-batch.
+            grad_sync (bool | None): When True we perform grad sync on backward. When False grad sync is skipped. When None we're not using DDP so cannot disable nor enable.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: Tuple of detached loss and accuracy scalar tensors.
+        """
         if grad_sync is not None:
             self.model.require_backward_grad_sync = grad_sync # type: ignore
-        
+
         autocast_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
         with torch.autocast( device_type='cuda', dtype=autocast_dtype ):
             model_outputs: CausalLMOutputWithPast = self.model(
@@ -659,7 +701,7 @@ class Trainer:
                 ignore_index=pad_token_id,
                 reduction='none'
             ) * valid_tokens
-            
+
             acc = ( logits.argmax( dim=-1 ) == curr_targets ) * valid_tokens
 
             loss = ( loss.sum( -1 ) / valid_length ).mean()
@@ -668,8 +710,13 @@ class Trainer:
 
         return loss.detach(), acc.detach()
 
-    def get_parameter_histograms( self ):
-        histograms = {}
+    def get_parameter_histograms( self ) -> dict[str, wandb.Histogram]:
+        """ Computes WandB histograms for all trainable model parameters.
+
+        Returns:
+            dict[str, wandb.Histogram]: Dict of param name (with '.' repalced by '/') to histogram.
+        """
+        histograms: dict[str, wandb.Histogram] = {}
         with torch.inference_mode():
             for name, p in self.model.named_parameters():
                 if p.requires_grad:
@@ -696,7 +743,7 @@ class Trainer:
         Returns:
             TrainerConfig: The config object to be passed to Trainer.__init__() in spawned processes.
         """
-        
+
         match init_mode: # type: ignore
             case 'setup':
                 # Initialize fresh configs
@@ -732,16 +779,16 @@ class Trainer:
                 model.save_pretrained( save_dir )
                 tokenizer.save_pretrained( save_dir )
                 trainer_config.save_config( save_dir )
-                
+
                 TrainerConfig.add_manifest_run( manifest_file_name, trainer_config.output_dir, trainer_config.run_name )
 
                 exit() # TODO: handle this more gracefully, maybe add logging?
-            
+
             case 'dummy':
                 # Initialize fresh configs
                 trainer_config = TrainerConfig( **trainer_kwargs )
                 model_config = DeCANConfig( **model_kwargs )
-                
+
                 # Load our modified tokenizer
                 separate_bos_eos = model_config.bos_token_id != model_config.eos_token_id
                 tokenizer = load_tokenizer( separate_bos_eos=separate_bos_eos )
@@ -753,12 +800,12 @@ class Trainer:
                 # Instantiate model and overwrite embeddings
                 model = DeCANForCausalLM( model_config )
                 set_pretrained_embeddings( model )
-                
+
                 rich.print( trainer_config )
                 rich.print( model_config )
-                
+
                 exit()
-                
+
             case 'new':
                 # Initialize fresh configs
                 trainer_config = TrainerConfig( **trainer_kwargs )
@@ -803,7 +850,7 @@ class Trainer:
                     trainer_kwargs[ 'run_name' ],
                     'checkpoint_curr'
                 )
-                
+
                 # Load config and update
                 trainer_config = TrainerConfig.load_config( load_dir, trainer_kwargs )
 
