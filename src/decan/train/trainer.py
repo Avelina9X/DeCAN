@@ -491,7 +491,7 @@ class Trainer:
         if self.world_rank == 0:
             wandb.login( key=os.environ[ 'WANDB_API_KEY' ] )
             wandb.init(
-                mode=self.trainer_config.wandb_mode,
+                mode=self.trainer_config.wandb_mode, # type: ignore
                 project=self.trainer_config.wandb_project,
                 group=self.trainer_config.wandb_group,
                 tags=self.trainer_config.wandb_tags,

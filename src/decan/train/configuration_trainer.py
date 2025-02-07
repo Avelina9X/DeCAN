@@ -371,6 +371,7 @@ class TrainerConfig:
 
         with open( file_path, 'r', encoding='utf-8' ) as f:
             run_dict = yaml.load( f, yaml.FullLoader )
+            assert isinstance( run_dict, dict )
         runs = run_dict[ 'runs' ]
 
         for run_num in runs:
@@ -389,6 +390,7 @@ class TrainerConfig:
         if os.path.exists( file_path ):
             with open( file_path, 'r', encoding='utf-8' ) as f:
                 run_dict = yaml.load( f, yaml.FullLoader )
+                assert isinstance( run_dict, dict )
             run_dict[ 'runs' ].append( run_name )
         else:
             run_dict = { 'runs': [ run_name ] }

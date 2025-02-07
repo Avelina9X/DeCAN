@@ -139,5 +139,6 @@ def parse_yaml_file( path: str, prefix: str ) -> dict:
 
     with open( path, 'r', encoding='utf-8' ) as f:
         new_dict = yaml.load( f, yaml.FullLoader )
+        assert isinstance( new_dict, dict )
 
     return new_dict[ prefix ]
