@@ -13,6 +13,19 @@ def base_batch_iterator(
     seq_length: int,
     worker_batch_size: int,
 ):
+    """ Returns an iterator of tokenized and document-masked batches for TransformerXL training.
+
+    Args:
+        iterator (enumerate): Iterator of document strings.
+        tokenizer (PreTrainedTokenizerBase): Tokenizer object to tokenize the documents in batch.
+        seq_length (int): Maximum sequence length for each batch.
+        worker_batch_size (int): The batch size for this worker; should be an integer division of global batch size.
+
+    Yields:
+        tuple[LongTensor, LongTensor, LongTensor]: Three-tuple of long tensors representing the current batch;
+            yields the (input_tokens, output_tokens, document_ids)
+    """
+
     # Create rolling queues for inputs, targets and document ids
     tokens_x_container = [ [] for _ in range( worker_batch_size ) ]
     tokens_y_container = [ [] for _ in range( worker_batch_size ) ]
@@ -27,7 +40,7 @@ def base_batch_iterator(
         try:
             # Loop over all sub-batch entries
             for i in range( worker_batch_size ):
-                
+
                 # While sequence i is shorter than the sequence length keep appending documents
                 while len( tokens_x_container[i] ) < seq_length:
 
@@ -82,6 +95,14 @@ def base_batch_iterator(
 
 
 def request_retry( url: str, file_path: str, max_retries: int = 30 ):
+    """ Implements `urllib.request.urlretrieve` with retries.
+    Uses linear backoff of 10 seconds * retry count.
+
+    Args:
+        url (str): The URL of the file to download.
+        file_path (str): Filepath to store downloaded file.
+        max_retries (int, optional): _description_. Defaults to 30.
+    """
     download_retries = 0
     while True:
         try:

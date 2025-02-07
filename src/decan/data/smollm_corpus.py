@@ -17,17 +17,26 @@ from transformers import PreTrainedTokenizerBase
 from .utils import base_batch_iterator, request_retry
 
 
-def read_lines_zst(file_name):
-    with open(file_name, 'rb') as file_handle:
+def read_lines_zst( file_name: str ):
+    """ Performs in memory compression and reads lines from a ZST file.
+
+    Args:
+        file_name (str): Path to ZST file
+
+    Yields:
+        str: Each individual line in the file
+    """
+
+    with open( file_name, 'rb' ) as file_handle:
         buffer = ''
-        reader = zstandard.ZstdDecompressor(max_window_size=2**31).stream_reader(file_handle)
+        reader = zstandard.ZstdDecompressor( max_window_size=2**31 ).stream_reader( file_handle )
         while True:
-            chunk = reader.read(2**27).decode()
+            chunk = reader.read( 2**27 ).decode()
             if not chunk:
                 break
-            lines = (buffer + chunk).split("\n")
+            lines = ( buffer + chunk ).split( "\n" )
 
-            for line in lines[:-1]:
+            for line in lines[ : -1 ]:
                 yield line
 
             buffer = lines[-1]
@@ -39,7 +48,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
     
     Should be instantiated by the `SmolLMCorpusDataset` class to correctly set up arguments.
     """
-    
+
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
@@ -75,13 +84,13 @@ class SmolLMCorpusClientDataset( IterableDataset ):
         self.server_ip = server_ip
         self.server_port = server_port
         self.num_procs = num_procs
-        
+
         # Compute global worker id from the local worker id and the world rank
         self.global_worker_id = local_worker_id + num_procs * world_rank
-        
+
         self.world_size = world_size
         self.world_rank = world_rank
-        
+
         self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'smollm_corpus', f'worker_{self.global_worker_id}' )
 
     @classmethod
@@ -110,7 +119,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
             raise ValueError( f'Shard index must be less than 23,698 but received {index}' )
 
         group = index // 1000
-        
+
         return f'https://huggingface.co/datasets/Avelina/smollm-corpus/resolve/main/data{group:02d}/train-{index:05d}-of-23698.jsonl.zst'
 
     @classmethod
@@ -123,9 +132,9 @@ class SmolLMCorpusClientDataset( IterableDataset ):
         global_worker_id,
         world_size,
         worker_cache_dir,
-    ):        
+    ):
         client_store = TCPStore( server_ip, server_port, None, False, timeout=timedelta( seconds=30 ) )
-        
+
         # Iterate from current shard until end of the dataset
         for current_shard in range( starting_shard, 59_166, num_procs * world_size ):
             # Update current shard number to resume later (only worker zero updates this value)
@@ -133,7 +142,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
 
             # Get the URL from the shard index
             url = cls.get_url_from_shard( current_shard )
-            
+
             # Download the parquet shard to a worker-indexed temporary cache
             file_path = os.path.join( worker_cache_dir, f'shard_{current_shard}.jsonl.zst' )
             os.makedirs( worker_cache_dir, exist_ok=True )
@@ -148,8 +157,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
                 except ( KeyError, JSONDecodeError ):
                     print()
                     print( f'JSON error @ shard={current_shard}, line={i}' )
-                        
-            
+
             # Delete in memory dataset and in cache dataset
             shutil.rmtree( worker_cache_dir )
 
@@ -173,8 +181,8 @@ class SmolLMCorpusClientDataset( IterableDataset ):
 
         for batch in base_batch_iterator( iterator, tokenizer, seq_length, worker_batch_size ):
             yield batch
-            
-    def __iter__( self ):        
+
+    def __iter__( self ):
         return iter( self.batch_iterator(
             self.tokenizer,
             self.seq_length,
@@ -187,10 +195,10 @@ class SmolLMCorpusClientDataset( IterableDataset ):
             self.world_size,
             self.worker_cache_dir,
         ) )
-    
+
     def __getitem__( self, index ):
         return NotImplementedError( 'This dataset does not support random access using __getitem__' )
-    
+
     def as_data_loader( self ):
         return DataLoader(
             self,
@@ -207,7 +215,7 @@ class SmolLMCorpusDataset( IterableDataset ):
     consumed. This class manually handles splitting the batch size across multiple devices and automatically spawns
     `SmolLMCorpusClientDataset` instances based on the desired number of worker processes.
     """
-    
+
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
@@ -241,19 +249,19 @@ class SmolLMCorpusDataset( IterableDataset ):
         self.server_ip = server_ip
         self.server_port = server_port
         self.num_procs = num_procs
-        
+
         self.world_size = world_size
         self.world_rank = world_rank
-        
+
         if global_batch_size % ( num_procs * world_size ) != 0:
             raise ValueError( 'batch_size must be divisible by num_procs * world_size!' )
 
         self.master_store = TCPStore( self.server_ip, self.server_port, None, world_rank == 0, timeout=timedelta( seconds=30 ) )
-        
+
         self.master_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'smollm_corpus' )
-        
+
         self.cleanup_cache()
-    
+
     def cleanup_cache( self ):
         """ Cleans up the temporary dataset cache. Only effective on the first device in the world.
         TODO: make changes for multi system cache cleanup
@@ -279,7 +287,7 @@ class SmolLMCorpusDataset( IterableDataset ):
             int: Zero indexed shard number.
         """
         return int( self.master_store.get( 'current_shard' ) )
-    
+
     def create_worker( self, idx: int ) -> DataLoader:
         """ Creates a worker DataLoader for this device.
 
@@ -301,7 +309,7 @@ class SmolLMCorpusDataset( IterableDataset ):
             world_size=self.world_size,
             world_rank=self.world_rank,
         ).as_data_loader()
-    
+
     def __iter__( self ):
         # Create a worker iterator for each local process
         workers = [ iter( self.create_worker( i ) ) for i in range( self.num_procs ) ]
@@ -316,7 +324,7 @@ class SmolLMCorpusDataset( IterableDataset ):
                 yield test_next_x, test_next_y, test_next_d
         except StopIteration:
             return
-    
+
     def __getitem__( self, index ):
         return NotImplementedError( 'This dataset does not support random access using __getitem__' )
 
