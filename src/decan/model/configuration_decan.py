@@ -55,7 +55,7 @@ class DeCANConfig( PretrainedConfig ):
         self.initializer_range = initializer_range
         self.rms_norm_eps = rms_norm_eps
         self.use_cache = use_cache
-        
+
         # Must set here rather than in super().__init__
         self.cls_token_id = cls_token_id
 

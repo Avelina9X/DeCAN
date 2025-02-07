@@ -87,8 +87,16 @@ class DeCANCacheMixin():
             self.document_ids = self.document_ids.to( **{ k: v for k, v in kwargs.items() if k != 'dtype' } )
 
     def update_document_ids( self, document_ids: torch.Tensor ) -> torch.Tensor:
+        """ Updates the cache with new document ids and returns the 4D document mask.
+
+        Args:
+            document_ids (torch.Tensor): Tensor of corresponding document ID for each token.
+
+        Returns:
+            torch.Tensor: Boolean mask in format [batch, heads, q_len, k_len], where heads is 1.
+        """
         max_cache_length: int | None = self.get_max_cache_shape() # type: ignore
-        
+
         if not hasattr( self, 'document_ids' ) or self.document_ids is None:
             self.document_ids = document_ids
         elif max_cache_length is None:
@@ -149,7 +157,7 @@ class DeCANTrainingCache( Cache, DeCANCacheMixin ):
 
     def get_seq_length( self, layer_idx: int | None = None ) -> int:
         layer_idx = layer_idx or 0
-        is_empty_layer = len( self.key_cache ) == 0 or len( self.key_cache ) <= layer_idx 
+        is_empty_layer = len( self.key_cache ) == 0 or len( self.key_cache ) <= layer_idx
         layer_seq_length = self.key_cache[layer_idx].shape[-2] if not is_empty_layer else 0
         return layer_seq_length
 
@@ -160,9 +168,16 @@ class DeCANTrainingCache( Cache, DeCANCacheMixin ):
         return self.get_max_cache_shape()
 
     def forward( self, *args, **kwargs ):
+        """ Forward pass is not implemented for Caches """
         raise NotImplementedError( 'There is no forward method.' )
 
     def pre_trim( self, sequence_length: int ):
+        """ Pre-trims the queries, keys and document_ids for the next forward pass.
+        This can save memory if we know the sequence length of the next forward pass ahead of time.
+
+        Args:
+            sequence_length (int): Sequence length of next forward pass.
+        """
         new_length = self.max_cache_length - sequence_length
         if hasattr( self, 'document_ids' ) and self.document_ids is not None:
             self.document_ids = self.document_ids[ :, -new_length : ]
@@ -198,6 +213,7 @@ class DeCANDynamicCache( DynamicCache, DeCANCacheMixin ):
         return out
 
     def forward( self, *args, **kwargs ):
+        """ Forward pass is not implemented for Caches """
         raise NotImplementedError( 'There is no forward method.' )
 
 
@@ -226,7 +242,7 @@ class DeCANRMSNorm(nn.Module):
         Returns:
             torch.Tensor: Normalised outputs of same shape is inputs
         """
-        
+
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.to( torch.float32 )
         variance = hidden_states.pow( 2 ).mean( -1, keepdim=True )
@@ -327,7 +343,7 @@ def apply_rope( cos: torch.Tensor, sin: torch.Tensor, x: torch.Tensor ) -> torch
 
 class DeCANHeadExpansion( nn.Module ):
     """ DeCAN Head Expansion module """
-    
+
     def __init__(
         self,
         in_heads: int,
@@ -347,7 +363,7 @@ class DeCANHeadExpansion( nn.Module ):
             exp_init (str): Initialisation method. Must be `base`, `mqa` or `hybrid`.
             head_smoothing (float): Head smoothing factor (lambda).
         """
-        
+
         super().__init__()
 
         if in_heads > out_heads:
@@ -414,7 +430,7 @@ class DeCANHeadExpansion( nn.Module ):
         Returns:
             torch.Tensor: Expanded Key or Value heads of form [batch, num_q_heads, k_len, head_dim]
         """
-        
+
         match self.exp_type: # type: ignore
             case 'scalar': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight[ ..., None, None ] * torch.eye( self.head_dim, dtype=self.weight.dtype, device=self.weight.device )[ None, None, :, : ] )
             case 'vector': return torch.einsum( 'bnsd,nmdD->bmsD', heads, self.weight[ ..., None ] * torch.eye( self.head_dim, dtype=self.weight.dtype, device=self.weight.device )[ None, None, :, : ] )
@@ -422,6 +438,11 @@ class DeCANHeadExpansion( nn.Module ):
             case _: assert False, 'How?'
 
     def get_gain_matrix( self ) -> torch.Tensor:
+        """ Returns the equivalent 2D gain matrix for the 2D, 3D or 4D weights.
+
+        Returns:
+            torch.Tensor: 2D gain matrix of shape [in_heads, out_heads]
+        """
         match self.exp_type: # type: ignore
             case 'scalar':
                 return self.weight.abs()
@@ -438,7 +459,7 @@ class DeCANAttention( nn.Module ):
     """
     Multi-headed attention with Densely Connected Attention Network head stacking.
     """
-    
+
     def __init__( self, config: DeCANConfig, layer_idx: int ):
         super().__init__()
 
@@ -458,7 +479,7 @@ class DeCANAttention( nn.Module ):
 
         # Get layer connection list needed to match the query head count: [layer_idx - q // k, ..., layer_idx ]
         self.layer_select = list( range( self.layer_num - self.num_all_kv_heads // self.num_new_kv_heads, self.layer_num ) )
-        
+
         if config.head_expansion is None:
             # We're NOT doing head expansion, so q_heads = kv_heads
             self.num_q_heads = self.num_all_kv_heads
@@ -591,7 +612,7 @@ class DeCANMLP( nn.Module ):
 
 class DeCANDecoderLayer( nn.Module ):
     """ DeCAN transformer block containing Attention and MLP layers """
-    
+
     def __init__( self, config: DeCANConfig, layer_idx: int ):
         super().__init__()
 
@@ -653,7 +674,7 @@ class DeCANDecoderLayer( nn.Module ):
 
 class DeCANPreTrainedModel( PreTrainedModel ): # pylint: disable=W0223
     """ The bare DeCAN model with no implemented functionality """
-    
+
     config_class = DeCANConfig
     base_model_prefix = 'model'
     _no_split_modules = [ 'DeCANDecoderLayer' ]
@@ -662,12 +683,12 @@ class DeCANPreTrainedModel( PreTrainedModel ): # pylint: disable=W0223
 
     def _init_weights( self, module ):
         std = self.config.initializer_range
-        
+
         if isinstance( module, nn.Linear ):
             module.weight.data.normal_( mean=0.0, std=std )
             if module.bias is not None:
                 module.bias.data.zero_()
-        
+
         elif isinstance( module, nn.Embedding ):
             module.weight.data.normal_( mean=0.0, std=std )
             if module.padding_idx is not None:
@@ -750,7 +771,7 @@ class DeCANModel( DeCANPreTrainedModel ):
             return_dict (bool, optional): Whether or not to return a `BaseModelOutputWithPast` instead of a plain tuple.
         """
         config: DeCANConfig = self.config # type: ignore
-        
+
         use_cache = config.use_cache if use_cache is None else use_cache
         return_dict = config.return_dict if return_dict is None else return_dict
         output_attentions = config.output_attentions if output_attentions is None else output_attentions
@@ -833,6 +854,8 @@ class DeCANModel( DeCANPreTrainedModel ):
         )
 
 class DeCANForCausalLM( DeCANPreTrainedModel, GenerationMixin ):
+    """ DeCAN-augmented causal language model with a language-modelling head on top. """
+    
     _tied_weights_keys = [ 'lm_head.weight' ]
 
     def __init__( self, config: DeCANConfig ):
@@ -910,7 +933,7 @@ class DeCANForCausalLM( DeCANPreTrainedModel, GenerationMixin ):
             return_dict (bool, optional): Whether or not to return a `CausalLMOutputWithPast` instead of a plain tuple.
         """
         config: DeCANConfig = self.config # type: ignore
-        
+
         use_cache = config.use_cache if use_cache is None else use_cache
         return_dict = config.return_dict if return_dict is None else return_dict
         output_attentions = config.output_attentions if output_attentions is None else output_attentions
