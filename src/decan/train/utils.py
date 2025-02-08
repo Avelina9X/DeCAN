@@ -15,19 +15,46 @@ from torcheval import metrics
 from torcheval.metrics.toolkit import sync_and_compute
 
 class MeanMetric():
+    """ A mean metric implementing `Mean` from `torcheval.metrics`.
+    
+    This class differs from torcheval in that it will automatically sync across ranks when `is_distributed=True`
+    """
     def __init__( self, is_distributed: bool ):
+        """ Initialize a metric object and its internal states.
+
+        Args:
+            is_distributed (bool): Set to True when using DDP to enable automatic sync.
+        """
         self.metric = metrics.Mean().to( 'cuda' )
         self.is_distributed = is_distributed
 
-    def update( self, input: torch.Tensor, *, weight: float | int | torch.Tensor = 1.0 ):
+    def update( self, input: torch.Tensor, *, weight: float | int | torch.Tensor = 1.0 ): # pylint: disable=W0622
+        """ Updates the mean metric using the underlying `Mean` object.
+
+        Args:
+            input (torch.Tensor): Tensor of input values.
+            weight (float | int | torch.Tensor, optional): Float or Int or Tensor of input weights. If weight is a Tensor, its size should match the input tensor size. Defaults to 1.0.
+
+        Returns:
+            Mean: returns the underlying `torcheval.metrics.Mean` object.
+        """
         return self.metric.update( input, weight=weight)
 
-    def compute( self ):
+    def compute( self ) -> torch.Tensor:
+        """ Computes the weighted mean using the underlying `Mean` object
+        and syncronises across ranks if `is_ditributed=True`
+
+        Returns:
+            torch.Tensor: Weighted mean.
+        """
         if self.is_distributed:
             return sync_and_compute( self.metric )
         return self.metric.compute()
 
     def reset( self ):
+        """ Resets the metric state variables to their default value
+        and applies a distributed barrier if `is_ditributed=True`
+        """
         if self.is_distributed:
             dist.barrier()
         self.metric.reset()
@@ -43,6 +70,7 @@ class DDPModelWrapper( DistributedDataParallel ):
 
 
 class ParseKwargs( Action ):
+    """ Special Action for argparse to parse key value pairs """
     def __call__( self, parser, namespace, values, option_string=None ):
         setattr( namespace, self.dest, dict() )
         for value in values: # type: ignore
@@ -51,6 +79,12 @@ class ParseKwargs( Action ):
 
 
 def field_parser( parser: ArgumentParser, f: Field ):
+    """ Automatically adds fields of a dataclass as arguments to an ArgumentParaser.
+
+    Args:
+        parser (ArgumentParser): The parser to add arguments to.
+        f (Field): The dataclass field to turn into an argument.
+    """
     if isinstance( f.type, str ):
         raise RuntimeError( 'Unresolved type detected!' )
 
@@ -104,6 +138,15 @@ def field_parser( parser: ArgumentParser, f: Field ):
         )
         
 def model_kwargs_parser( parser: ArgumentParser ):
+    """ Adds special model kwarg fields to an ArgumentParaser.
+    
+    This adds:
+    - `--model-kwargs` to parse key-value pairs for the model config.
+    - `--model-kwargs-hexp` to parse key-value pairs for the `head_expansion` dict in the model config.
+
+    Args:
+        parser (ArgumentParser): The parser to add arguments to.
+    """
     parser.add_argument(
         '--model_kwargs',
         '--model-kwargs',
@@ -124,6 +167,20 @@ def model_kwargs_parser( parser: ArgumentParser ):
     )
 
 def recursive_dict_update( base_dict: dict, new_dict: Mapping ) -> dict:
+    """ Overwrites a base dict with elements from a new dict recursively.
+    
+    When overwriting a list elements from the new dict will be APPENDED to the old dict.
+    When overwriting a dict, elements from the new dict will UPDATE the old dict.
+    
+    Note the updates will happen in place, but we will also return the base dict.
+
+    Args:
+        base_dict (dict): The base dict to receive updates.
+        new_dict (Mapping): The new dict to retrieve keys and values from.
+
+    Returns:
+        dict: A reference to the updated base dict.
+    """
     for k, v in new_dict.items():
         if isinstance( v, Mapping ):
             base_dict[k] = recursive_dict_update( base_dict.get( k, {} ), v )
@@ -134,6 +191,16 @@ def recursive_dict_update( base_dict: dict, new_dict: Mapping ) -> dict:
     return base_dict
 
 def parse_yaml_file( path: str, prefix: str ) -> dict:
+    """ Parses a YAML file and returns the conents of the `prefix` element.
+    This is intended for parsing config YAML files which may contain both `train` and `model` keys.
+
+    Args:
+        path (str): Path to the YAML file to parse.
+        prefix (str): Top level key in the YAML structure to return.
+
+    Returns:
+        dict: The value of the top level key given by `prefix`.
+    """
     if not os.path.isfile( path ):
         raise ValueError( f'Config file {path} does not exist!' )
 
