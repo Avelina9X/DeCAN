@@ -115,8 +115,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
         Returns:
             str: Huggingface URL string.
         """
-        if index >= 23_698:
-            raise ValueError( f'Shard index must be less than 23,698 but received {index}' )
+        index = index % 23698
 
         group = index // 1000
 
