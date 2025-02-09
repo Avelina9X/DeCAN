@@ -36,7 +36,7 @@ from data import CommonCorpusDataset, SlimPajamaDataset, PileDataset, SmolLMCorp
 from .utils import DDPModelWrapper, MeanMetric
 from .configuration_trainer import TrainerConfig
 
-from .evaluator import OWT10kEvaluator
+from .validation_evaluator import OWT10kEvaluator
 
 @contextmanager
 def suppress_stdout_stderr():
