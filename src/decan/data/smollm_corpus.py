@@ -1,5 +1,6 @@
 """ SmolLMCorpus dataset class """
 
+import itertools
 from datetime import timedelta
 import os
 import shutil
@@ -135,7 +136,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
         client_store = TCPStore( server_ip, server_port, None, False, timeout=timedelta( seconds=30 ) )
 
         # Iterate from current shard until end of the dataset
-        for current_shard in range( starting_shard, 59_166, num_procs * world_size ):
+        for current_shard in itertools.count( start=starting_shard, step=num_procs * world_size ):
             # Update current shard number to resume later (only worker zero updates this value)
             cls.set_current_shard( global_worker_id, client_store, current_shard + num_procs * world_size )
 
