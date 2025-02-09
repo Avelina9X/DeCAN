@@ -503,6 +503,7 @@ class Trainer:
 
                 if self.world_rank == 0:
                     metrics.update( self.get_parameter_histograms() )
+                    metrics.update( self.get_gain_matrices() )
                     metrics.update( {
                         'stats/training_step': self.training_step,
                         'stats/num_tokens': self.training_step * self.trainer_config.global_batch_size * self.trainer_config.sequence_length,
@@ -662,6 +663,40 @@ class Trainer:
                 if p.requires_grad:
                     histograms[ f"parameters/{name.replace( '.', '/' ) }" ] = wandb.Histogram( p.cpu().numpy() ) # type: ignore
         return histograms
+
+    def get_gain_matrices( self ) -> dict[str, wandb.Table]:
+        """ Computes WandB table for the head expansion gain matrices.
+
+        Returns:
+            dict[str, wandb.Table]: Empty dict for models without head expansion, or dict with a WandB table.
+        """
+        tables: dict[str, wandb.Table] = {}
+
+        with torch.inference_mode():
+            if self.model.config.head_expansion is not None:
+                columns = [ 'layer', 'head', 'in', 'out', 'gain' ]
+
+                data = []
+
+                for layer_num, layer in enumerate( self.model.model.layers ):
+                    k_exp = layer.attention.k_exp.get_gain_matrix()
+                    v_exp = layer.attention.v_exp.get_gain_matrix()
+
+                    in_heads, out_heads = k_exp.shape
+
+                    for in_idx in range( in_heads ):
+                        for out_idx in range( out_heads ):
+                            gain = float( k_exp[ in_idx, out_idx ].item() )
+                            data.append( [ layer_num, 'K', in_idx, out_idx, gain ] )
+
+                    for in_idx in range( in_heads ):
+                        for out_idx in range( out_heads ):
+                            gain = float( v_exp[ in_idx, out_idx ].item() )
+                            data.append( [ layer_num, 'V', in_idx, out_idx, gain ] )
+
+                tables[ 'gain_matrices' ] = wandb.Table( columns, data )
+
+        return tables
 
     @staticmethod
     def initialize(
