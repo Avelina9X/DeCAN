@@ -167,7 +167,7 @@ class Trainer:
             'acc': MeanMetric( trainer_config.use_ddp ),
         }
 
-        self.evaluator = OWT10kEvaluator(
+        self.validation_evaluator = OWT10kEvaluator(
             self.model,
             self.tokenizer,
             self.trainer_config.eval_batch_size,
@@ -553,7 +553,7 @@ class Trainer:
                 self.trainer_config.is_complete = True
 
             if do_eval:
-                eval_metrics = { f'validation/{k}': v for k, v in self.evaluator.eval().items() }
+                eval_metrics = { f'validation/{k}': v for k, v in self.validation_evaluator.eval().items() }
                 lm_eval_metrics = { f'validation/{k}': v for k, v in self.lm_eval().items() }
                 metrics.update( eval_metrics )
                 metrics.update( lm_eval_metrics )

@@ -7,7 +7,7 @@ import datasets
 
 from .utils import MeanMetric
 
-class Evaluator:
+class ValidationEvaluator:
     def __init__(
         self,
         model: PreTrainedModel,
@@ -107,7 +107,7 @@ class Evaluator:
             metric.reset()
         return stats
         
-class OWT10kEvaluator( Evaluator ):
+class OWT10kEvaluator( ValidationEvaluator ):
     def load_dataset_shard( self ) -> datasets.Dataset:
         def token_func( line ):
             tokens_raw = self.tokenizer.encode( line[ 'text' ], add_special_tokens=False )
