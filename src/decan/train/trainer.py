@@ -481,9 +481,10 @@ class Trainer:
             # Perform the training step
             self.train_step( next( iterator ), cache_list )
 
-            # Print progbar on rank zero
+            # Print progbar on rank zero, but MUST calculate on all ranks to prevent deadlock
+            progbar = self.progress_bar( time.time() - start_time )
             if self.world_rank == 0:
-                print( '\r' + self.progress_bar( time.time() - start_time ), end='', flush=True )
+                print( '\r' + progbar, end='', flush=True )
 
             # Figure out what we're doing this step!
             do_eval = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.validation_freq ) == 0
