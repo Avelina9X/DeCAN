@@ -205,19 +205,10 @@ class Trainer:
         # Return wrapped ZeRO optimizer if enabled
         if self.trainer_config.use_zero_optimizer:
             from torch.distributed.optim import ZeroRedundancyOptimizer # pylint: disable=C0415
-            return ZeroRedundancyOptimizer(
-                param_groups,
-                optimizer_cls,
-                lr=0,
-                **self.trainer_config.optimizer_kwargs,
-            )
+            return ZeroRedundancyOptimizer( param_groups, optimizer_cls, lr=0, **self.trainer_config.optimizer_kwargs )
 
         # Return base optimizer
-        return optimizer_cls(
-            param_groups,
-            lr=0,
-            **self.trainer_config.optimizer_kwargs
-        )
+        return optimizer_cls( param_groups, lr=0, **self.trainer_config.optimizer_kwargs )
 
     def create_dataset( self ):
         """ Returns the dataset specified by the trainer config """
@@ -451,6 +442,7 @@ class Trainer:
         dataloader = self.dataset.as_data_loader()
         iterator = iter( dataloader )
 
+        # Setup WandB if we're on rank zero
         if self.world_rank == 0:
             wandb.login( key=os.environ[ 'WANDB_API_KEY' ] )
             wandb.init(
@@ -469,42 +461,53 @@ class Trainer:
                 }
             )
 
+        # Create a cache for every micro-batch
         cache_list = [
             DeCANTrainingCache( max_cache_length=self.trainer_config.cache_length )
             for _ in range( self.trainer_config.gradient_accumulation_steps )
         ]
 
-        # Create loop until session end or max_steps
+        # Create loop until session end or max_steps # TODO: this line is way too long
         session_max_step = self.trainer_config.max_steps if self.trainer_config.epochs_per_session == -1 else self.training_step + self.trainer_config.steps_per_epoch * self.trainer_config.epochs_per_session
 
+        # Get start time for the zeroth epoch
         start_time = time.time()
+
+        # Loop until the end
         for _ in range( self.training_step, session_max_step ):
+            # We might be saving metrics this iteration, so create an empty dict
             metrics = {}
 
+            # Perform the training step
             self.train_step( next( iterator ), cache_list )
 
-            progress_bar = self.progress_bar( time.time() - start_time)
+            # Print progbar on rank zero
             if self.world_rank == 0:
-                print( '\r' + progress_bar, end='', flush=True )
+                print( '\r' + self.progress_bar( time.time() - start_time ), end='', flush=True )
 
+            # Figure out what we're doing this step!
             do_eval = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.validation_freq ) == 0
             do_temp_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.temp_checkpoint_freq ) == 0
             do_perm_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.perm_checkpoint_freq ) == 0
             do_final_checkpoint = self.training_step % self.trainer_config.max_steps == 0
             do_log = self.training_step % self.trainer_config.steps_per_epoch == 0
 
+            # If we're done training we MUST set this flag before saving anything
             if do_final_checkpoint:
                 self.trainer_config.is_complete = True
 
+            # Perform evaluations and update metrics dict
             if do_eval:
                 eval_metrics = { f'validation/{k}': v for k, v in self.validation_evaluator.eval().items() }
                 lm_eval_metrics = { f'validation/{k}': v for k, v in self.benchmark_evlauator.eval().items() }
                 metrics.update( eval_metrics )
                 metrics.update( lm_eval_metrics )
 
+            # If this is a log step, eval step or checkpoint step we log to WandB
             if do_log or do_eval or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 metrics.update( { f'train/{k}': v for k, v in self.reset_metrics().items() } )
 
+                # We can only log on rank zero
                 if self.world_rank == 0:
                     metrics.update( self.get_parameter_histograms() )
                     metrics.update( self.get_gain_matrices() )
@@ -515,30 +518,37 @@ class Trainer:
                     } )
 
                     wandb.log( metrics )
+
+                    # We've finished an "epoch" so start printing the progbar on the next line
                     print()
 
                 # Reset start time
                 start_time = time.time()
 
+            # Save current checkpoint (also for perm and final)
             if do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 self.save_temp_checkpoint()
 
                 # Re-reset start time because saving takes time
                 start_time = time.time()
 
+            # Save perm checkpoint (also for final)
             if do_perm_checkpoint or do_final_checkpoint:
                 self.save_perm_checkpoint()
 
                 # Re-reset start time because saving takes time
                 start_time = time.time()
 
+            # Save final checkpoint and break out
             if do_final_checkpoint:
                 self.save_final_checkpoint()
                 break
 
+            # If we performed eval or saved a checkpoint there may be memory we can free
             if do_eval or do_temp_checkpoint or do_perm_checkpoint or do_final_checkpoint:
                 torch.cuda.empty_cache()
 
+        # If we finished training or finished the session this WandB run is done
         if self.world_rank == 0:
             wandb.finish()
 
@@ -549,34 +559,48 @@ class Trainer:
             batch (tuple[torch.Tensor, torch.Tensor, torch.Tensor]): Tuple of input, target and document id tensors.
             cache_list (list[DeCANTrainingCache]): List of DeCAN caches, each element corresponding to a micro-batch.
         """
+
+        # Ensure we're in training mode
         self.model.train()
 
         # Unpack batch
         tokens, targets, documents = batch
 
+        # Split batch into micro-batches and move to GPU
         tokens_list = torch.split( tokens.to( device='cuda', non_blocking=True ), self.trainer_config.micro_batch_size )
         targets_list = torch.split( targets.to( device='cuda', non_blocking=True ), self.trainer_config.micro_batch_size )
         documents_list = torch.split( documents.to( device='cuda', non_blocking=True ), self.trainer_config.micro_batch_size )
 
+        # Iterate over all micro-batches
         for step in range( self.trainer_config.gradient_accumulation_steps ):
             curr_tokens = tokens_list[step]
             curr_targets = targets_list[step]
             curr_documents = documents_list[step] if self.trainer_config.document_masking else None
             curr_cache = cache_list[step]
 
+            # If we're doing DDP we must only syncronise on the last batch for speed and numerical correctness.
             if self.trainer_config.use_ddp:
                 grad_sync = step == ( self.trainer_config.gradient_accumulation_steps - 1 )
             else:
                 grad_sync = None
 
+            # Ensure cache is on the GPU
             curr_cache.cache_to( device='cuda', non_blocking=True )
+
+            # Perform the micro-batch training step
             loss, acc = self.train_micro_step( curr_tokens, curr_targets, curr_documents, curr_cache, grad_sync )
+
+            # Pre-trim cache to save memory
             curr_cache.pre_trim( self.trainer_config.sequence_length )
+
+            # Detach cache gradients. Move cache to system RAM if offloading is enabled
             curr_cache.detach_cache_to( device='cpu' if self.trainer_config.cpu_offload_cache else 'cuda', non_blocking=True )
 
+            # Update metrics
             self.metrics[ 'loss' ].update( loss )
             self.metrics[ 'acc' ].update( acc )
 
+        # Finally do the optimizer step
         self.optimizer_step()
 
     def optimizer_step( self ):
@@ -585,14 +609,19 @@ class Trainer:
         Automatically incrememnts the training step,
         performs grad unscaling and clipping,
         and updates the learning rate. """
+
+        # Increment training step
         self.training_step += 1
 
+        # Update learning rate for all param groups
         for p_group in self.optimizer.param_groups:
             p_group[ 'lr' ] = self.get_learning_rate()
 
+        # Perform gradient clipping
         self.optimizer_scaler.unscale_( self.optimizer )
         torch.nn.utils.clip_grad_norm_( self.model.parameters(), self.trainer_config.max_grad_norm )
 
+        # Finally, do the optimization step
         self.optimizer_scaler.step( self.optimizer )
         self.optimizer_scaler.update()
         self.optimizer.zero_grad()
@@ -618,10 +647,15 @@ class Trainer:
         Returns:
             tuple[torch.Tensor, torch.Tensor]: Tuple of detached loss and accuracy scalar tensors.
         """
+
+        # Maybe change the gradient sync state
         if grad_sync is not None:
             self.model.require_backward_grad_sync = grad_sync # type: ignore
 
+        # Get the autocast dtype using our favorite hack
         autocast_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
+
+        # Wrap everything in the autocast region *apart* from loss scaling
         with torch.autocast( device_type='cuda', dtype=autocast_dtype ):
             model_outputs: CausalLMOutputWithPast = self.model(
                 input_ids=curr_tokens,
@@ -633,13 +667,17 @@ class Trainer:
                 return_dict=True,
             )
 
+            # We only need logits during pretraining
             logits = model_outputs.logits
 
+            # Get the ignore index from the padding token or default -100 value
             pad_token_id = self.model.config.pad_token_id or -100
 
+            # Compute the number of trainable tokens
             valid_tokens = ( curr_targets != pad_token_id )
             valid_length = valid_tokens.float().sum( -1 ).clamp( min=1.0 )
 
+            # Calculate cross entropy loss without reduction
             loss = torch.nn.functional.cross_entropy(
                 input=logits.transpose( 2, 1 ).float(),
                 target=curr_targets,
@@ -647,12 +685,17 @@ class Trainer:
                 reduction='none'
             ) * valid_tokens
 
+            # Calculate accuracy without reduction
             acc = ( logits.argmax( dim=-1 ) == curr_targets ) * valid_tokens
 
+            # Normalise loss and accuracy over trainable tokens
             loss = ( loss.sum( -1 ) / valid_length ).mean()
             acc = ( acc.float().sum( -1 ) / valid_length ).mean()
+
+        # Scale loss with gradient accumulation factor and perform backward
         self.optimizer_scaler.scale( loss / self.trainer_config.gradient_accumulation_steps ).backward()
 
+        # Return detached values for metric tracking
         return loss.detach(), acc.detach()
 
     def get_parameter_histograms( self ) -> dict[str, wandb.Histogram]:
