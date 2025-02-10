@@ -7,41 +7,13 @@ import shutil
 import json
 from json import JSONDecodeError
 
-import zstandard
-
 import torch
 from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
 
 from transformers import PreTrainedTokenizerBase
 
-from .utils import base_batch_iterator, request_retry
-
-
-def read_lines_zst( file_name: str ):
-    """ Performs in memory compression and reads lines from a ZST file.
-
-    Args:
-        file_name (str): Path to ZST file
-
-    Yields:
-        str: Each individual line in the file
-    """
-
-    with open( file_name, 'rb' ) as file_handle:
-        buffer = ''
-        reader = zstandard.ZstdDecompressor( max_window_size=2**31 ).stream_reader( file_handle )
-        while True:
-            chunk = reader.read( 2**27 ).decode()
-            if not chunk:
-                break
-            lines = ( buffer + chunk ).split( "\n" )
-
-            for line in lines[ : -1 ]:
-                yield line
-
-            buffer = lines[-1]
-        reader.close()
+from .utils import base_batch_iterator, request_retry, read_lines_zst
 
 class SmolLMCorpusClientDataset( IterableDataset ):
     """

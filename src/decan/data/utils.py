@@ -7,6 +7,8 @@ from urllib.error import URLError, HTTPError, ContentTooShortError
 import torch
 from transformers import PreTrainedTokenizerBase
 
+import zstandard
+
 def base_batch_iterator(
     iterator: enumerate,
     tokenizer: PreTrainedTokenizerBase,
@@ -118,3 +120,28 @@ def request_retry( url: str, file_path: str, max_retries: int = 30 ):
                 continue
         else:
             break
+
+def read_lines_zst( file_name: str ):
+    """ Performs in memory compression and reads lines from a ZST file.
+
+    Args:
+        file_name (str): Path to ZST file
+
+    Yields:
+        str: Each individual line in the file
+    """
+
+    with open( file_name, 'rb' ) as file_handle:
+        buffer = ''
+        reader = zstandard.ZstdDecompressor( max_window_size=2**31 ).stream_reader( file_handle )
+        while True:
+            chunk = reader.read( 2**27 ).decode()
+            if not chunk:
+                break
+            lines = ( buffer + chunk ).split( "\n" )
+
+            for line in lines[ : -1 ]:
+                yield line
+
+            buffer = lines[-1]
+        reader.close()

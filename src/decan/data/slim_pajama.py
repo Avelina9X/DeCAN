@@ -7,8 +7,6 @@ import shutil
 import json
 from json import JSONDecodeError
 
-import zstandard
-
 import torch
 from torch.distributed import TCPStore # type: ignore
 from torch.utils.data import IterableDataset, DataLoader
@@ -16,24 +14,8 @@ from torch.utils.data import IterableDataset, DataLoader
 from transformers import PreTrainedTokenizerBase
 from huggingface_hub import HfFileSystem
 
-from .utils import base_batch_iterator, request_retry
+from .utils import base_batch_iterator, request_retry, read_lines_zst
 
-
-def read_lines_zst(file_name):
-    with open(file_name, 'rb') as file_handle:
-        buffer = ''
-        reader = zstandard.ZstdDecompressor(max_window_size=2**31).stream_reader(file_handle)
-        while True:
-            chunk = reader.read(2**27).decode()
-            if not chunk:
-                break
-            lines = (buffer + chunk).split("\n")
-
-            for line in lines[:-1]:
-                yield line
-
-            buffer = lines[-1]
-        reader.close()
 
 class SlimPajamaClientDataset( IterableDataset ):
     """
