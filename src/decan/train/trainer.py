@@ -158,21 +158,21 @@ class Trainer:
         }
 
         self.validation_evaluator = OWT10kEvaluator(
-            self.model,
-            self.tokenizer,
-            self.trainer_config.eval_batch_size,
-            self.trainer_config.cache_length,
-            self.world_size,
-            self.world_rank,
+            model=self.model,
+            tokenizer=self.tokenizer,
+            eval_batch_size=self.trainer_config.eval_batch_size,
+            eval_max_len=self.trainer_config.cache_length,
+            world_size=self.world_size,
+            world_rank=self.world_rank,
         )
 
         self.benchmark_evlauator = BenchmarkEvaluator(
-            self.model,
-            self.tokenizer,
-            self.trainer_config.eval_batch_size,
-            self.trainer_config.cache_length,
-            self.world_size,
-            self.world_rank,
+            model=self.model,
+            tokenizer=self.tokenizer,
+            eval_batch_size=self.trainer_config.eval_batch_size,
+            eval_max_len=self.trainer_config.cache_length,
+            world_size=self.world_size,
+            world_rank=self.world_rank,
         )
 
         
@@ -261,8 +261,14 @@ class Trainer:
         self.training_step = trainer_state[ 'training_step' ]
         self.starting_shard = trainer_state[ 'current_shard' ]
 
-    def save_trainer_state( self ) -> None:
-        """ Saves the trainer state to trainer_state.pt and trainer.json """
+    def save_trainer_state( self, save_dir: str | None = None ) -> None:
+        """ Saves the trainer state to trainer_state.pt and trainer.json
+
+        Args:
+            save_dir (str, optional): Overwrites the save directory if not None. Defaults to None.
+        """
+
+        save_dir = save_dir or self.trainer_config.curr_checkpoint_dir
 
         # Save training_step and current_shard into state dict
         state_dict = {
@@ -272,9 +278,9 @@ class Trainer:
 
         # Save state dict and config to disk only on rank zero
         if self.world_rank == 0:
-            trainer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'trainer_state.pt' )
+            trainer_state_path = os.path.join( save_dir, 'trainer_state.pt' )
             torch.save( state_dict, trainer_state_path )
-            self.trainer_config.save_config( self.trainer_config.curr_checkpoint_dir )
+            self.trainer_config.save_config( save_dir )
 
     def load_optimizer_state( self ) -> None:
         """ Loads optimizer state from optimizer_state.pt """
@@ -284,8 +290,14 @@ class Trainer:
         state_dict = torch.load( optimizer_state_path, weights_only=True )
         self.optimizer.load_state_dict( state_dict )
 
-    def save_optimizer_state( self ) -> None:
-        """ Saves optimizer state to optimizer_state.pt """
+    def save_optimizer_state( self, save_dir: str | None = None ) -> None:
+        """ Saves optimizer state to optimizer_state.pt
+
+        Args:
+            save_dir (str, optional): Overwrites the save directory if not None. Defaults to None.
+        """
+
+        save_dir = save_dir or self.trainer_config.curr_checkpoint_dir
 
         # If we're using zero we need to consolidate to rank zero
         if self.trainer_config.use_zero_optimizer:
@@ -293,7 +305,7 @@ class Trainer:
 
         # We can only save to disk if we're on rank zero
         if self.world_rank == 0:
-            optimizer_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'optimizer_state.pt' )
+            optimizer_state_path = os.path.join( save_dir, 'optimizer_state.pt' )
             state_dict = self.optimizer.state_dict()
             torch.save( state_dict, optimizer_state_path )
 
@@ -305,12 +317,18 @@ class Trainer:
         state_dict = torch.load( scaler_state_path, weights_only=True )
         self.optimizer_scaler.load_state_dict( state_dict )
 
-    def save_scaler_state( self ) -> None:
-        """ Saves the mixed precision scaler from scaler_state.pt """
+    def save_scaler_state( self, save_dir: str | None = None ) -> None:
+        """ Saves the mixed precision scaler from scaler_state.pt
+
+        Args:
+            save_dir (str, optional): Overwrites the save directory if not None. Defaults to None.
+        """
+
+        save_dir = save_dir or self.trainer_config.curr_checkpoint_dir
 
         # We can only save to disk if we're on rank zero, but should we? There is no consolidation mechanic...
         if self.world_rank == 0:
-            scaler_state_path = os.path.join( self.trainer_config.curr_checkpoint_dir, 'scaler_state.pt' )
+            scaler_state_path = os.path.join( save_dir, 'scaler_state.pt' )
             state_dict = self.optimizer_scaler.state_dict()
             torch.save( state_dict, scaler_state_path )
 
@@ -337,11 +355,21 @@ class Trainer:
         This saves the:
         - tokenizer files and config
         - model weights (FP32) and config
+        
+        When perm_checkpoint_full_state is True also saves:
+        - trainer state (trainer_state.pt, trainer.json)
+        - optimizer state (optimizer_state.pt)
+        - scaler state (scaler_state.pt)
         """
 
         save_dir = self.trainer_config.perm_checkpoint_dir( self.training_step )
         self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
         self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
+
+        if self.trainer_config.perm_checkpoint_full_state:
+            self.save_trainer_state( save_dir )
+            self.save_optimizer_state( save_dir )
+            self.save_scaler_state( save_dir )
 
     def save_final_checkpoint( self ) -> None:
         """ Saves the final model checkpoint once training is done.

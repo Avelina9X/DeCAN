@@ -53,6 +53,7 @@ class TrainerConfig:
     validation_freq: int = field( default=4, metadata={ 'help': 'Number of `epochs` that must pass before performing validation.' } )
     temp_checkpoint_freq: int = field( default=4, metadata={ 'help': 'Number of `epochs` that must pass before saving a temporary checkpoint.' } )
     perm_checkpoint_freq: int = field( default=64, metadata={ 'help': 'Number of `epochs` that must pass before saving a permanent checkpoint.' } )
+    perm_checkpoint_full_state: bool = field( default=False, metadata={ 'help': 'When True saves the trainer, optimizer and scaler states with the perm checkpoint.' } )
 
     training_dataset: str = field( default='smollm_corpus', metadata={ 'help': 'Training dataset to use.' } )
     starting_shard: int = field( default=0, metadata={ 'help': 'Initial shard number to start with. Defaults to zero.' } )
