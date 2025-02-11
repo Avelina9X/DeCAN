@@ -49,13 +49,13 @@ class BenchmarkEvaluator:
         )
 
         eval_task_distribution = {
-            'hellaswag': 10042,
-            'openbookqa': 500,
-            'winogrande': 1267,
-            'arc_easy': 2376,
-            'arc_challenge': 1172,
-            'boolq': 3270,
-            'piqa': 1838,
+            'hellaswag': 40168,
+            'openbookqa': 2000,
+            'winogrande': 2534,
+            'arc_easy': 9501,
+            'arc_challenge': 4687,
+            'boolq': 6540,
+            'piqa': 3676,
         }
 
         self.eval_tasks = list( binpacking.to_constant_bin_number( eval_task_distribution, world_size )[ world_rank ].keys() ) # type: ignore
