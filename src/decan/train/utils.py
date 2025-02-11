@@ -40,9 +40,12 @@ class MeanMetric():
         """
         return self.metric.update( input, weight=weight)
 
-    def compute( self ) -> torch.Tensor:
+    def compute( self, sync=True ) -> torch.Tensor:
         """ Computes the weighted mean using the underlying `Mean` object
         and syncronises across ranks if `is_ditributed=True`
+
+        Args:
+            sync (bool, optional): When True enables syncing for distributed runs. Defaults to True.
 
         Returns:
             torch.Tensor: Weighted mean.

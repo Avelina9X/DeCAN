@@ -405,11 +405,12 @@ class Trainer:
         # Cleanup dataset cache
         self.dataset.cleanup_cache()
 
-    def progress_bar( self, elapsed: float ) -> str:
+    def progress_bar( self, elapsed: float, sync=True ) -> str:
         r""" Returns a TQDM progress bar string with training stats.
 
         Args:
             elapsed (float): Time elapsed since epoch start.
+            sync (bool, optional): When True enables syncing metric for distributed runs. Defaults to True.
 
         Returns:
             str: Formatted TQDM string. Should be prepended by `\r` when printing to clear the previous progress bar.
@@ -421,7 +422,7 @@ class Trainer:
             ncols=100,
             unit='it',
             bar_format='{desc}: {percentage:.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]',
-            postfix=f"loss={self.metrics['loss'].compute():.3f}, acc={self.metrics['acc'].compute():.3f}, lr={self.get_learning_rate():.3e}",
+            postfix=f"loss={self.metrics['loss'].compute(sync=sync):.3f}, acc={self.metrics['acc'].compute(sync=sync):.3f}, lr={self.get_learning_rate():.3e}",
             prefix=f'Step {self.training_step}'
         )
 
@@ -481,17 +482,17 @@ class Trainer:
             # Perform the training step
             self.train_step( next( iterator ), cache_list )
 
-            # Print progbar on rank zero, but MUST calculate on all ranks to prevent deadlock
-            progbar = self.progress_bar( time.time() - start_time )
-            if self.world_rank == 0:
-                print( '\r' + progbar, end='', flush=True )
-
             # Figure out what we're doing this step!
             do_eval = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.validation_freq ) == 0
             do_temp_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.temp_checkpoint_freq ) == 0
             do_perm_checkpoint = self.training_step % ( self.trainer_config.steps_per_epoch * self.trainer_config.perm_checkpoint_freq ) == 0
             do_final_checkpoint = self.training_step % self.trainer_config.max_steps == 0
             do_log = self.training_step % self.trainer_config.steps_per_epoch == 0
+
+            # Print progbar on rank zero, but MUST calculate on all ranks to prevent deadlock
+            progbar = self.progress_bar( time.time() - start_time, sync=do_log )
+            if self.world_rank == 0:
+                print( '\r' + progbar, end='', flush=True )
 
             # If we're done training we MUST set this flag before saving anything
             if do_final_checkpoint:
