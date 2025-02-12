@@ -1,6 +1,7 @@
 """ Module which handles all evaluations """
 
 import os
+import functools
 from argparse import ArgumentParser
 import yaml
 
@@ -66,6 +67,7 @@ def eval_suite( lm: HFLM, suite: str, verbosity: int ) -> list[tuple[str, float]
 
     return score_list
 
+@functools.cache
 def eval_task( lm: HFLM, task_name: str, num_fewshot: int, metric_name: str, verbosity: int ) -> float:
     """ Evals an LM on a single task, yielding a specific metric.
 
@@ -183,7 +185,7 @@ def run( arguments: dict ):
     # Set some HF flags
     datasets.config.HF_DATASETS_TRUST_REMOTE_CODE = True # type: ignore
     datasets.disable_progress_bar()
-    eval_logger.setLevel( 'ERROR' )
+
 
     # Santiy check, print args
     rich.print( arguments )
@@ -193,6 +195,7 @@ def run( arguments: dict ):
 
     # Get the verbosity level
     verbosity = arguments[ 'verbosity' ]
+    eval_logger.setLevel( [ 'ERROR', 'WARNING', 'INFO' ][ verbosity ] )
 
     # Parse either local or online
     match arguments[ 'group' ]:
