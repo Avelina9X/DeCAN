@@ -215,12 +215,15 @@ class Trainer:
 
         match self.trainer_config.training_dataset: # type: ignore
             case 'pile':
+                logger.warning( 'The Pile dataset is deprecated and may not load correctly!' )
                 dataset_cls = PileDataset
 
             case 'slim_pajama':
+                logger.warning( 'The SlimPajama dataset is deprecated and may not load correctly!' )
                 dataset_cls = SlimPajamaDataset
 
             case 'common_corpus':
+                logger.warning( 'The CommonCorpus dataset is deprecated and may not load correctly!' )
                 dataset_cls = CommonCorpusDataset
 
             case 'smollm_corpus':

@@ -1,4 +1,4 @@
-""" SlimPajama dataset class """
+""" SlimPajama dataset class. DEPRECATED """
 
 
 from datetime import timedelta

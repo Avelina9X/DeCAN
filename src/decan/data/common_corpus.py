@@ -1,4 +1,4 @@
-""" Common Corpus dataset class """
+""" Common Corpus dataset class. DEPRECATED """
 
 
 from datetime import timedelta

@@ -1,4 +1,4 @@
-""" Pile dataset classes """
+""" Pile dataset classes. DEPRECATED """
 
 from datetime import timedelta
 import json
