@@ -336,13 +336,15 @@ class Trainer:
         - model weights (FP32) and config
         """
 
+        save_dir = self.trainer_config.curr_checkpoint_dir
+
         self.save_trainer_state()
         self.save_optimizer_state()
         self.save_scaler_state()
 
-        save_dir = self.trainer_config.curr_checkpoint_dir
-        self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
-        self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
+        if self.world_rank == 0:
+            self.model.save_pretrained( save_dir )
+            self.tokenizer.save_pretrained( save_dir )
 
     def save_perm_checkpoint( self ) -> None:
         """ Saves a permanent checkpoint, indexed by the training step.
@@ -357,13 +359,15 @@ class Trainer:
         """
 
         save_dir = self.trainer_config.perm_checkpoint_dir( self.training_step )
-        self.model.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
-        self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
 
         if self.trainer_config.perm_checkpoint_full_state:
             self.save_trainer_state( save_dir )
             self.save_optimizer_state( save_dir )
             self.save_scaler_state( save_dir )
+
+        if self.world_rank == 0:
+            self.model.save_pretrained( save_dir )
+            self.tokenizer.save_pretrained( save_dir )
 
     def save_final_checkpoint( self ) -> None:
         """ Saves the final model checkpoint once training is done.
@@ -374,8 +378,10 @@ class Trainer:
 
         save_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
         save_dir = self.trainer_config.final_checkpoint_dir
-        self.model.to( dtype=save_dtype ).save_pretrained( save_dir, is_main_process=self.world_rank==0 ) # type: ignore
-        self.tokenizer.save_pretrained( save_dir, is_main_process=self.world_rank==0 )
+
+        if self.world_rank == 0:
+            self.model.to( dtype=save_dtype ).save_pretrained( save_dir ) # type: ignore
+            self.tokenizer.save_pretrained( save_dir )
 
     def get_learning_rate( self ) -> float:
         """ Computes the learning rate at the current step and returns it as a float"""
