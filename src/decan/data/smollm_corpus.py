@@ -127,8 +127,8 @@ class SmolLMCorpusClientDataset( IterableDataset ):
                 try:
                     obj = json.loads(line)
                     text = obj[ 'text' ]
-                    if len( text ) > MAX_DOCUMENT_CHARS:
-                        continue
+                    # if len( text ) > MAX_DOCUMENT_CHARS:
+                    #     continue
                     yield text
                 except ( KeyError, JSONDecodeError ):
                     print()
