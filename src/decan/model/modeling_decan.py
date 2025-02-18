@@ -621,12 +621,12 @@ class DeCANDecoderLayer( nn.Module ):
         self.layer_idx = layer_idx
 
         self.attention_input_norm = DeCANRMSNorm( config )
-        # self.attention_input_norm = nn.LayerNorm( config.hidden_size )
         self.attention = DeCANAttention( config, layer_idx )
 
         self.mlp_input_norm = DeCANRMSNorm( config )
-        # self.mlp_input_norm = nn.LayerNorm( config.hidden_size )
         self.mlp = DeCANMLP( config )
+
+        self.norm_scale = ( layer_idx + 1.0 ) ** -0.5 if config.rms_norm_scaling else None
 
     def forward(
         self,
@@ -650,6 +650,9 @@ class DeCANDecoderLayer( nn.Module ):
 
         # Normalise input, compute attention, and add residual to stream
         normed_states = self.attention_input_norm( hidden_states )
+        if self.norm_scale is not None:
+            normed_states = normed_states * self.norm_scale
+
         residual, attention_weights, present_key_values = self.attention(
             hidden_states=normed_states,
             past_key_values=past_key_values,
@@ -661,6 +664,9 @@ class DeCANDecoderLayer( nn.Module ):
 
         # Normalise input, compute MLP, and add residual to stream
         normed_states = self.mlp_input_norm( hidden_states )
+        if self.norm_scale is not None:
+            normed_states = normed_states * self.norm_scale
+
         residual = self.mlp( normed_states )
         hidden_states = hidden_states + residual
 

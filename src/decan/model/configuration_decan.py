@@ -29,6 +29,7 @@ class DeCANConfig( PretrainedConfig ):
         mlp_bias: bool = False,
         initializer_range: float = 0.02,
         rms_norm_eps: float = 1e-6,
+        rms_norm_scaling: bool = False,
         use_cache: bool = True,
         bos_token_id: int = 0,
         eos_token_id: int = 2,
@@ -54,6 +55,7 @@ class DeCANConfig( PretrainedConfig ):
         self.mlp_bias = mlp_bias
         self.initializer_range = initializer_range
         self.rms_norm_eps = rms_norm_eps
+        self.rms_norm_scaling = rms_norm_scaling
         self.use_cache = use_cache
 
         # Must set here rather than in super().__init__
