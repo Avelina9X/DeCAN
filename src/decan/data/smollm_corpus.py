@@ -66,7 +66,7 @@ class SmolLMCorpusClientDataset( IterableDataset ):
         self.world_size = world_size
         self.world_rank = world_rank
 
-        self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'smollm_corpus', f'worker_{self.global_worker_id}' )
+        self.worker_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], os.uname()[1], 'smollm_corpus', f'worker_{self.global_worker_id}' )
 
     @classmethod
     def set_current_shard( cls, global_worker_id: int, client_store: TCPStore, value: int ):
@@ -234,7 +234,7 @@ class SmolLMCorpusDataset( IterableDataset ):
 
         self.master_store = TCPStore( self.server_ip, self.server_port, None, world_rank == 0, timeout=timedelta( seconds=30 ) )
 
-        self.master_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], 'smollm_corpus' )
+        self.master_cache_dir = os.path.join( os.environ[ 'HF_TEMP_DIR' ], os.uname()[1], 'smollm_corpus' )
 
         self.cleanup_cache()
 
