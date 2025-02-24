@@ -182,20 +182,43 @@ class Trainer:
         # Get the decay parameters from model
         decay_parameters = get_parameter_names( self.model, [ *ALL_LAYERNORM_LAYERS, torch.nn.Embedding ] )
         decay_parameters = [ name for name in decay_parameters if 'bias' not in name ]
+
+        # Remove additional exluded params
         for exclude in self.trainer_config.weight_decay_exclude:
             decay_parameters = [ name for name in decay_parameters if exclude not in name ]
+
+        # Create param lists
+        decay_param_list = [ ( n, p ) for n, p in self.model.named_parameters() if ( n in decay_parameters and p.requires_grad ) ]
+        not_decay_param_list = [ ( n, p ) for n, p in self.model.named_parameters() if ( n not in decay_parameters and p.requires_grad ) ]
+
+        # Move hexp params into seperate list if needed
+        if self.trainer_config.weight_decay_hexp is not None:
+            hexp_param_list = [ ( n, p ) for n, p in decay_param_list if '_exp.weight' in n ]
+            decay_param_list = [ ( n, p ) for n, p in decay_param_list if '_exp.weight' not in n ]
+
+            if len( hexp_param_list ) == 0:
+                logger.warning( 'Custom weight decay for head expansion parameters specified, but none are included for weight decay!' )
+        else:
+            hexp_param_list = []
 
         # Create param groups for weight decay and non weight decay
         param_groups = [
             {
-                'params': [ p for n, p in self.model.named_parameters() if ( n in decay_parameters and p.requires_grad ) ],
+                'params': [ p for _, p in decay_param_list ],
                 'weight_decay': self.trainer_config.weight_decay,
             },
             {
-                'params': [ p for n, p in self.model.named_parameters() if ( n not in decay_parameters and p.requires_grad ) ],
+                'params': [ p for _, p in not_decay_param_list ],
                 'weight_decay': 0,
             },
         ]
+
+        # If there are any specified hexp params
+        if len( hexp_param_list ) > 0:
+            param_groups.append( {
+                'params': [ p for _, p in hexp_param_list ],
+                'weight_decay': self.trainer_config.weight_decay_hexp
+            } )
 
         # Get our optimizer class
         optimizer_cls: type[Optimizer] = {
