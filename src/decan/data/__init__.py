@@ -20,3 +20,7 @@ from .pile import (
 from .smollm_corpus import (
     SmolLMCorpusDataset
 )
+
+from .smollm_corpus_cleaned import (
+    SmolLMCorpusCleanedDataset
+)

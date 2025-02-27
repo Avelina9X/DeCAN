@@ -27,7 +27,7 @@ from lm_eval.models.huggingface import eval_logger
 from model import DeCANConfig, DeCANForCausalLM
 from model.utils import load_tokenizer, set_pretrained_embeddings
 from model.modeling_decan import DeCANTrainingCache
-from data import CommonCorpusDataset, SlimPajamaDataset, PileDataset, SmolLMCorpusDataset
+from data import CommonCorpusDataset, SlimPajamaDataset, PileDataset, SmolLMCorpusDataset, SmolLMCorpusCleanedDataset
 
 from .utils import DDPModelWrapper, MeanMetric
 from .configuration_trainer import TrainerConfig
@@ -251,6 +251,9 @@ class Trainer:
 
             case 'smollm_corpus':
                 dataset_cls = SmolLMCorpusDataset
+
+            case 'smollm_corpus_cleaned':
+                dataset_cls = SmolLMCorpusCleanedDataset
 
             case _:
                 raise ValueError( f'Dataset {self.trainer_config.training_dataset} is not a valid choice' )
