@@ -15,8 +15,6 @@ from transformers import PreTrainedTokenizerBase
 
 from .utils import base_batch_iterator, request_retry, read_lines_zst
 
-MAX_DOCUMENT_CHARS = 100_000
-
 class SmolLMCorpusClientDataset( IterableDataset ):
     """
     SmolLMCorpus Client IterableDataset which handles a single worker on a single device.
@@ -127,8 +125,6 @@ class SmolLMCorpusClientDataset( IterableDataset ):
                 try:
                     obj = json.loads(line)
                     text = obj[ 'text' ]
-                    # if len( text ) > MAX_DOCUMENT_CHARS:
-                    #     continue
                     yield text
                 except ( KeyError, JSONDecodeError ):
                     print()
