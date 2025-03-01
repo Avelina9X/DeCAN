@@ -3,6 +3,7 @@ import time
 import urllib
 import urllib.request
 from urllib.error import URLError, HTTPError, ContentTooShortError
+from http.client import HTTPException
 
 import torch
 from transformers import PreTrainedTokenizerBase
@@ -109,7 +110,7 @@ def request_retry( url: str, file_path: str, max_retries: int = 30 ):
     while True:
         try:
             urllib.request.urlretrieve( url, file_path )
-        except ( URLError, HTTPError, ContentTooShortError ) as err:
+        except ( URLError, HTTPError, ContentTooShortError, HTTPException ) as err:
             download_retries += 1
 
             if download_retries > max_retries:
