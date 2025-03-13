@@ -181,3 +181,7 @@ decan.sif
 app_build.sh
 app_run.sh
 .bash_history
+
+/*.sh
+/*.sbatch
+slurm-*.out
