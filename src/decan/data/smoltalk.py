@@ -1,11 +1,6 @@
 """ SmolLMCorpusCleaned dataset class """
 
-import itertools
-from datetime import timedelta
 import os
-import shutil
-import json
-from json import JSONDecodeError
 
 import torch
 from torch.utils.data import IterableDataset, DataLoader
