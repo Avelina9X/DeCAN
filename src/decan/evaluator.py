@@ -1,8 +1,12 @@
 """ Module which handles all evaluations """
 
+import time
 import os
+from os import devnull
 import functools
 from argparse import ArgumentParser
+from contextlib import contextmanager,redirect_stderr,redirect_stdout, nullcontext
+from requests.exceptions import HTTPError
 import yaml
 
 import rich
@@ -19,6 +23,13 @@ from lm_eval.evaluator import simple_evaluate
 from model import DeCANConfig, DeCANForCausalLM
 
 logger = logging.get_logger( __name__ )
+
+@contextmanager
+def suppress_stdout_stderr():
+    """A context manager that redirects stdout and stderr to devnull"""
+    with open(devnull, 'w') as fnull:
+        with redirect_stderr(fnull) as err, redirect_stdout(fnull) as out:
+            yield (err, out)
 
 TASKS = {
     'leaderboard': [
@@ -81,18 +92,36 @@ def eval_task( lm: HFLM, task_name: str, num_fewshot: int, metric_name: str, ver
     Returns:
         float: Selected metric. 
     """
+
+    max_retries = 30
+    download_retries = 0
     
     with torch.inference_mode():
-        eval_results = simple_evaluate(
-            lm,
-            tasks=[ task_name ],
-            num_fewshot=num_fewshot,
-            device='cuda',
-            log_samples=False,
-            batch_size=1,
-            verbosity='ERROR',
-            cache_requests='LM_HARNESS_CACHE_PATH' in os.environ
-        )[ 'results' ] # type: ignore
+        while True:
+            try:
+                context = suppress_stdout_stderr if verbosity == 0 else nullcontext
+                with context():
+                    eval_results = simple_evaluate(
+                        lm,
+                        tasks=[ task_name ],
+                        num_fewshot=num_fewshot,
+                        device='cuda',
+                        log_samples=False,
+                        batch_size=1,
+                        verbosity='ERROR',
+                        cache_requests='LM_HARNESS_CACHE_PATH' in os.environ
+                    )[ 'results' ] # type: ignore
+            except HTTPError as err:
+                download_retries += 1
+
+                if download_retries > max_retries:
+                    raise err
+                else:
+                    print( f'Download error. Retrying in {download_retries * 10} seconds.' )
+                    time.sleep( download_retries * 10 )
+                    continue
+            else:
+                break
 
     if verbosity > 1:
         rich.print( eval_results )
@@ -166,6 +195,25 @@ def print_csv( results: dict[str, list[tuple[str, float]]] ):
     for line in data:
         print( ','.join( [ str( i ) for i in line ] ) )
 
+def write_csv( results: dict[str, list[tuple[str, float]]], output_path: str ):
+    """ Converts the results dict into CSV lines and writes to file
+
+    Args:
+        results (dict[str, list[tuple[str, float]]]): Results dict produced by the eval loop.
+        output_path (str): Path to write the csv file to.
+    """
+    columns = [ 'model' ] + [ i[0] for i in list( results.values() )[0] ]
+    data = []
+
+    for model_name, metric_list in results.items():
+        curr_data = [ model_name ] + [ i[1] for i in metric_list ]
+        data.append( curr_data )
+    
+    with open( output_path, mode='w' ) as file:
+        file.write( ','.join( columns ) + '\n' )
+        for line in data:
+            file.write( ','.join( [ str( i ) for i in line ] ) + '\n' )
+
 
 def run( arguments: dict ):
     """ Runs the eval with the parsed arguments.
@@ -196,6 +244,9 @@ def run( arguments: dict ):
     # Get the verbosity level
     verbosity = arguments[ 'verbosity' ]
     eval_logger.setLevel( [ 'ERROR', 'WARNING', 'INFO' ][ verbosity ] )
+
+    # Get results path, if exists
+    results_path = arguments[ 'results_path' ]
 
     # Parse either local or online
     match arguments[ 'group' ]:
@@ -250,6 +301,9 @@ def run( arguments: dict ):
         results[name] = metrics
 
     print_csv( results )
+
+    if results_path is not None:
+        write_csv( results, results_path )
 
 def setup():
     """ Setup function for evaluation. Parses command line arguments, instantiates models and performs evals. """
@@ -338,6 +392,17 @@ def setup():
             help='Verbosity level of task printing. 0 for no printing, 1 prints the extracted metrics only, 2 prints all metrics.',
             dest='verbosity',
         )
+
+        group.add_argument(
+            '--results_path',
+            '--rusults-path',
+            nargs='?',
+            type=lambda x: os.path.expanduser( x.format( **os.environ ) ),
+            help='Path to save the results CSV to.',
+            dest='results_path'
+        )
+
+        
 
     # Parse arguments as dict
     arguments = parser.parse_args().__dict__
