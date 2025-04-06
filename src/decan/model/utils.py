@@ -39,6 +39,42 @@ def load_tokenizer( cache_dir: str | None = None, separate_bos_eos=False ) -> Pr
 
     return tokenizer
 
+def load_sft_tokenizer( original_tokenizer: PreTrainedTokenizerBase, cache_dir: str | None = None ) -> PreTrainedTokenizerBase:
+    """ Loads the OPT tokenizer and modifies it for use with finetuning DeCAN
+
+    Args:
+        original_tokenizer (PreTrainedTokenizerBase): The original tokenizer used by the pre-trained model.
+        cache_dir (str, optional): Cache directory to store tokenizer. If `None` uses the `HF_CACHE_DIR` envar. Defaults to None.
+
+    Returns:
+        PreTrainedTokenizerBase: Modified GPT2TokenizerFast using OPT vocabulary, and with DeCAN's special tokens.
+    """
+
+    # If the original tokenizer has a chat template we can use it as is
+    if original_tokenizer.chat_template is not None:
+        return original_tokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        'facebook/opt-125m',
+        cache_dir=cache_dir or os.environ[ 'HF_CACHE_DIR' ],
+        bos_token=original_tokenizer.bos_token,
+        sep_token=AddedToken( '<|im_start|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
+        cls_token=AddedToken( '<|im_end|>', rstrip=False, lstrip=False, single_word=False, normalized=True, special=True ),
+        add_bos_token=False,
+        use_fast=True,
+    )
+
+    assert isinstance( tokenizer, PreTrainedTokenizerFast )
+
+    tokenizer.chat_template = (
+        "{{ bos_token }}{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n' }}{% endif %}"
+        "{% if (message['role'] != 'assistant') %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}"
+        "{% elif (message['role'] == 'assistant')%}{{'<|im_start|>' + message['role'] + '\n' }}{% generation %}{{message['content'] + '<|im_end|>'}}{% endgeneration %}{{'\n'}}"
+        "{% endif %}"
+        "{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+    )
+
+    return tokenizer
 
 
 @torch.no_grad
