@@ -561,13 +561,38 @@ class DeCANAttention( nn.Module ):
 
             attn_output = torch.einsum( 'bhqk,bhkd->bhqd', attention_matrix, v_states )
         else:
-            # Compute multi-head SDPA
-            attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
-                q_states,
-                k_states,
-                v_states,
-                attn_mask=attention_mask
-            )
+            if not hasattr( past_key_values, 'document_ids' ) or past_key_values.document_ids is None:
+                if L == 1:
+                    # We don't need a mask because we're in inference mode
+                    attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
+                        q_states,
+                        k_states,
+                        v_states,
+                    )
+                elif q_states.shape[-2] == k_states.shape[-2]:
+                    # We have a square mask so can use causual
+                    attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
+                        q_states,
+                        k_states,
+                        v_states,
+                        is_causal=True,
+                    )
+                else:
+                    # Compute multi-head SDPA with mask
+                    attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
+                        q_states,
+                        k_states,
+                        v_states,
+                        attn_mask=attention_mask
+                    )
+            else:
+                # Compute multi-head SDPA with mask
+                attn_output = F.scaled_dot_product_attention( # pylint: disable=E1102
+                    q_states,
+                    k_states,
+                    v_states,
+                    attn_mask=attention_mask
+                )
 
             attention_matrix = None
 
