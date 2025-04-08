@@ -166,7 +166,7 @@ class Trainer:
             world_rank=self.world_rank,
         )
 
-        self.benchmark_evlauator = BenchmarkEvaluator(
+        self.benchmark_evaluator = BenchmarkEvaluator(
             model=self.model,
             tokenizer=self.tokenizer,
             eval_batch_size=self.trainer_config.eval_batch_size,
@@ -536,7 +536,7 @@ class Trainer:
             # Perform evaluations and update metrics dict
             if do_eval:
                 eval_metrics = { f'validation/{k}': v for k, v in self.validation_evaluator.eval().items() }
-                lm_eval_metrics = { f'validation/{k}': v for k, v in self.benchmark_evlauator.eval().items() }
+                lm_eval_metrics = { f'validation/{k}': v for k, v in self.benchmark_evaluator.eval().items() }
                 metrics.update( eval_metrics )
                 metrics.update( lm_eval_metrics )
 
