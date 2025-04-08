@@ -34,12 +34,14 @@ class BenchmarkEvaluator:
         eval_max_len: int,
         world_size: int,
         world_rank: int,
+        mixed_precision: bool = True,
     ):
         self.model = model
         self.eval_batch_size = eval_batch_size
         self.eval_max_len = eval_max_len
         self.world_size = world_size
         self.world_rank = world_rank
+        self.mixed_precision = mixed_precision
 
         self.eval_model = HFLM(
             pretrained=model,
@@ -78,15 +80,17 @@ class BenchmarkEvaluator:
         while True:
             try:
                 with suppress_stdout_stderr():
-                    eval_results = simple_evaluate(
-                        self.eval_model,
-                        tasks=self.eval_tasks,
-                        device='cuda',
-                        log_samples=False,
-                        batch_size=self.eval_batch_size,
-                        verbosity='ERROR',
-                        cache_requests='LM_HARNESS_CACHE_PATH' in os.environ
-                    )[ 'results' ] # type: ignore
+                    autocast_dtype = torch.bfloat16 if self.model.config.use_bfloat16 else torch.float16
+                    with torch.autocast( device_type='cuda', dtype=autocast_dtype, enabled=self.mixed_precision ):
+                        eval_results = simple_evaluate(
+                            self.eval_model,
+                            tasks=self.eval_tasks,
+                            device='cuda',
+                            log_samples=False,
+                            batch_size=self.eval_batch_size,
+                            verbosity='ERROR',
+                            cache_requests='LM_HARNESS_CACHE_PATH' in os.environ
+                        )[ 'results' ] # type: ignore
             except HTTPError as err:
                 download_retries += 1
 
