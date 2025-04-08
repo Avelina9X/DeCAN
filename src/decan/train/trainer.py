@@ -175,6 +175,16 @@ class Trainer:
             world_rank=self.world_rank,
         )
 
+        self.benchmark_evaluator_test = BenchmarkEvaluator(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            eval_batch_size=1,
+            eval_max_len=self.trainer_config.cache_length,
+            world_size=self.world_size,
+            world_rank=self.world_rank,
+            mixed_precision=False,
+        )
+
         
     def create_optimizer( self ) -> Optimizer:
         """ Returns the optimizer specified by the trainer config """
@@ -538,6 +548,10 @@ class Trainer:
                 eval_metrics = { f'validation/{k}': v for k, v in self.validation_evaluator.eval().items() }
                 lm_eval_metrics = { f'validation/{k}': v for k, v in self.benchmark_evaluator.eval().items() }
                 metrics.update( eval_metrics )
+                metrics.update( lm_eval_metrics )
+
+            if do_final_checkpoint:
+                lm_eval_metrics = { f'test/{k}': v for k, v in self.benchmark_evaluator_test.eval().items() }
                 metrics.update( lm_eval_metrics )
 
             # If this is a log step, eval step or checkpoint step we log to WandB
