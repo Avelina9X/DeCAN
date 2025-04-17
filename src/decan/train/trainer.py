@@ -37,7 +37,7 @@ from .benchmark_evaluator import BenchmarkEvaluator
 
 # Default DDP address and port
 DEFAULT_DDP_ADDR = 'localhost'
-DEFAULT_DDP_PORT = '12355'
+DEFAULT_DDP_PORT = '12356'
 
 # Default dataset TCPStore address and port
 DEFAULT_TCP_ADDR = 'localhost'
